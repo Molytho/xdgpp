@@ -322,6 +322,26 @@ namespace xdg::desktop_entry_spec {
                && (get_type() != entry_type::Link || get_well_known_value(well_known_keys::Type).has_value());
     }
 
+    std::string desktop_entry::make_command_line([[maybe_unused]] std::vector<std::string> launch_args,
+        [[maybe_unused]] bool are_uri) const {
+        // TODO: Support uris and files
+        static const boost::regex ignored_keys {"(?<!%)((?:%%)*)%[fFuU]"};
+        static const boost::regex percent_re {"%%"};
+        static const boost::regex uneven_percents_re {"(?<!%)(?:%%)*%(?!%)"};
+        // TODO: Some are unsupported
+        static const boost::regex unsupported_re {"(?<!%)((?:%%)*)%[ik]"};
+        static const boost::regex name_re {"(?<!%)((?:%%)*)%c"};
+        std::string cmdline {get_exec()};
+        cmdline = boost::regex_replace(std::move(cmdline), ignored_keys, "$1");
+        cmdline = boost::regex_replace(std::move(cmdline), unsupported_re, "$1");
+        cmdline = boost::regex_replace(std::move(cmdline), name_re, get_name().get());
+        if (boost::regex_search(cmdline, uneven_percents_re)) {
+            throw std::runtime_error("Invalid desktop file Exec entry");
+        }
+        cmdline = boost::regex_replace(std::move(cmdline), percent_re, "%");
+        return cmdline;
+    }
+
     std::string desktop_entry::get_id() const {
         if (m_relative_path.empty()) {
             return {};

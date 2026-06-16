@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -141,6 +142,12 @@ namespace xdg::desktop_entry_spec {
     using localized_string      = detail::localized_data<std::string>;
     using localized_string_list = detail::localized_data<std::vector<std::string>>;
 
+    struct launch_parameters {
+        std::string command_list;
+        std::string_view working_directory;
+        bool terminal;
+    };
+
     class application_action {
     public:
         application_action(std::string id);
@@ -273,11 +280,30 @@ namespace xdg::desktop_entry_spec {
 
         bool should_show() const;
 
+        template<class F>
+            requires std::is_invocable_v<F, launch_parameters &>
+        void launch(F &&launcher, std::vector<std::string> args, bool are_uris) const {
+            launch_parameters params {
+                .command_list      = make_command_line(std::move(args), are_uris),
+                .working_directory = get_path(),
+                .terminal          = get_terminal()
+            };
+            std::invoke(std::forward<F>(launcher), params);
+        }
+
+        template<class F>
+            requires std::is_invocable_v<F, launch_parameters &>
+        void launch(F &&launcher) const {
+            launch(std::forward<F>(launcher), {}, false);
+        }
+
     private:
         desktop_entry();
         desktop_entry(std::istream &&is);
 
         bool check_required_keys() const noexcept;
+
+        std::string make_command_line(std::vector<std::string> launch_args, bool are_uri) const;
 
         constexpr const std::any &get_well_known_value(well_known_keys val) const noexcept {
             return m_well_known_keys.at(size_t(val));
