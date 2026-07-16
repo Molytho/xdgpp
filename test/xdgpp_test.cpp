@@ -11,7 +11,7 @@ int main(int, char **) {
         [[maybe_unused]] auto res = it->should_show();
         auto actions              = it->get_actions();
         if (!actions.empty()) {
-            std::cout << actions.at(0).get_name().get() << '\n';
+            std::cout << actions.at(0)->get_name().get() << '\n';
         }
         std::cout << res << '\n';
     }

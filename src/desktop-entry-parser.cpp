@@ -290,8 +290,8 @@ namespace xdg::desktop_entry_spec::detail {
                 m_skip_section = true;
                 return;
             }
-            m_target.m_actions.emplace_back(std::string(action_name));
-            m_current_action = std::addressof(m_target.m_actions.back());
+            m_target.m_actions.emplace_back(std::make_shared<application_action>(std::string(action_name)));
+            m_current_action = m_target.m_actions.back().get();
         }
     }
 
@@ -310,7 +310,10 @@ namespace xdg::desktop_entry_spec::detail {
                     parse_well_know_key(well_known_keys::Name, parse_result, m_current_action->m_name);
                     return;
                 case well_known_keys::Icon:
-                    parse_well_know_key(well_known_keys::Icon, parse_result, m_current_action->m_icon);
+                    if (!m_current_action->m_icon) {
+                        m_current_action->m_icon = std::make_unique<localized_string>();
+                    }
+                    parse_well_know_key(well_known_keys::Icon, parse_result, *m_current_action->m_icon);
                     return;
                 case well_known_keys::Exec:
                     parse_well_know_key<std::string>(well_known_keys::Exec,

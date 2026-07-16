@@ -156,7 +156,7 @@ namespace xdg::desktop_entry_spec {
 
         const localized_string &get_name() const noexcept { return m_name; }
 
-        const localized_string &get_icon() const noexcept { return m_icon; }
+        const localized_string *get_icon() const noexcept { return m_icon.get(); }
 
         const std::string &get_exec() const noexcept { return m_exec; }
 
@@ -165,7 +165,7 @@ namespace xdg::desktop_entry_spec {
 
         std::string m_id;
         localized_string m_name;
-        localized_string m_icon;
+        std::unique_ptr<localized_string> m_icon;
         std::string m_exec;
     };
 
@@ -234,7 +234,7 @@ namespace xdg::desktop_entry_spec {
             return get_well_known_bool<false>(well_known_keys::Terminal);
         }
 
-        const std::vector<application_action> &get_actions() const noexcept { return m_actions; }
+        const std::vector<std::shared_ptr<application_action>> &get_actions() const noexcept { return m_actions; }
 
         const std::vector<std::string> *get_actions_key() const noexcept {
             return get_well_known_typed<std::vector<std::string>>(well_known_keys::Actions);
@@ -349,7 +349,7 @@ namespace xdg::desktop_entry_spec {
         std::filesystem::path m_relative_path {};
 
         std::array<std::any, size_t(well_known_keys::Last) + 1> m_well_known_keys {};
-        std::vector<application_action> m_actions {};
+        std::vector<std::shared_ptr<application_action>> m_actions {};
     };
 
     API_PUBLIC std::vector<std::unique_ptr<desktop_entry>> get_all_desktop_entries();
