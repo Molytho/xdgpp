@@ -15,52 +15,8 @@
 
 #include "helper.h"
 
+/* ---------- class locale ---------- */
 namespace xdg::desktop_entry_spec {
-    enum class well_known_keys : uint8_t {
-        Actions,
-        Categories,
-        Comment,
-        DBusActivatable,
-        Exec,
-        GenericName,
-        Hidden,
-        Icon,
-        Implements,
-        Keywords,
-        MimeType,
-        Name,
-        NoDisplay,
-        NotShowIn,
-        OnlyShowIn,
-        Path,
-        PrefersNonDefaultGPU,
-        SingleMainWindow,
-        StartupNotify,
-        StartupWMClass,
-        Terminal,
-        TryExec,
-        Type,
-        URL,
-        Version,
-        Last = Version
-    };
-    API_PUBLIC std::string_view to_string(well_known_keys val) noexcept;
-    API_PUBLIC std::optional<well_known_keys> well_known_keys_from_string(std::string_view str) noexcept;
-    API_PUBLIC std::ostream &operator<<(std::ostream &os, well_known_keys val);
-    API_PUBLIC std::istream &operator>>(std::istream &is, well_known_keys &out);
-
-    enum class entry_type : uint8_t {
-        Application,
-        Link,
-        Directory,
-        First = Application,
-        Last  = Directory
-    };
-    API_PUBLIC std::string_view to_string(entry_type val) noexcept;
-    API_PUBLIC std::optional<entry_type> entry_type_from_string(std::string_view str) noexcept;
-    API_PUBLIC std::ostream &operator<<(std::ostream &os, entry_type val);
-    API_PUBLIC std::istream &operator>>(std::istream &is, entry_type &out);
-
     struct parsed_locale {
         std::string_view lang;
         std::string_view country;
@@ -115,29 +71,77 @@ namespace std {
     };
 } // namespace std
 
+/* ---------- class localized_data ---------- */
+namespace xdg::desktop_entry_spec::detail {
+    template<class T>
+    class localized_data {
+        T m_generic {};
+        std::unordered_map<locale, T> m_translations {};
+
+    public:
+        localized_data() = default;
+
+        void add(std::string_view lang, T val);
+
+        void set_generic(T val);
+
+        void add_translated(std::string_view lang, T val);
+
+        API_PUBLIC const T &get() const;
+
+        API_PUBLIC const T &get(std::string_view locale_str) const;
+    };
+} // namespace xdg::desktop_entry_spec::detail
+
 namespace xdg::desktop_entry_spec {
     namespace detail {
         class desktop_entry_parser;
-
-        template<class T>
-        class localized_data {
-            T m_generic {};
-            std::unordered_map<locale, T> m_translations {};
-
-        public:
-            localized_data() = default;
-
-            void add(std::string_view lang, T val);
-
-            void set_generic(T val);
-
-            void add_translated(std::string_view lang, T val);
-
-            API_PUBLIC const T &get() const;
-
-            API_PUBLIC const T &get(std::string_view locale_str) const;
-        };
     } // namespace detail
+
+    enum class well_known_keys : uint8_t {
+        Actions,
+        Categories,
+        Comment,
+        DBusActivatable,
+        Exec,
+        GenericName,
+        Hidden,
+        Icon,
+        Implements,
+        Keywords,
+        MimeType,
+        Name,
+        NoDisplay,
+        NotShowIn,
+        OnlyShowIn,
+        Path,
+        PrefersNonDefaultGPU,
+        SingleMainWindow,
+        StartupNotify,
+        StartupWMClass,
+        Terminal,
+        TryExec,
+        Type,
+        URL,
+        Version,
+        Last = Version
+    };
+    API_PUBLIC std::string_view to_string(well_known_keys val) noexcept;
+    API_PUBLIC std::optional<well_known_keys> well_known_keys_from_string(std::string_view str) noexcept;
+    API_PUBLIC std::ostream &operator<<(std::ostream &os, well_known_keys val);
+    API_PUBLIC std::istream &operator>>(std::istream &is, well_known_keys &out);
+
+    enum class entry_type : uint8_t {
+        Application,
+        Link,
+        Directory,
+        First = Application,
+        Last  = Directory
+    };
+    API_PUBLIC std::string_view to_string(entry_type val) noexcept;
+    API_PUBLIC std::optional<entry_type> entry_type_from_string(std::string_view str) noexcept;
+    API_PUBLIC std::ostream &operator<<(std::ostream &os, entry_type val);
+    API_PUBLIC std::istream &operator>>(std::istream &is, entry_type &out);
 
     using localized_string      = detail::localized_data<std::string>;
     using localized_string_list = detail::localized_data<std::vector<std::string>>;
