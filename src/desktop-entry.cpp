@@ -104,6 +104,13 @@ namespace {
     constexpr std::default_sentinel_t end(const alternative_locales_iterator &) {
         return {};
     }
+
+    class desktop_entry_wrapper : public desktop_entry {
+    public:
+        template<class... Args>
+        desktop_entry_wrapper(Args &&...args) noexcept(std::is_nothrow_constructible_v<desktop_entry, Args...>) :
+                desktop_entry(std::forward<Args>(args)...) { }
+    };
 } // namespace
 
 namespace xdg::desktop_entry_spec {
@@ -252,9 +259,16 @@ namespace xdg::desktop_entry_spec {
         template class localized_data<std::vector<std::string>>;
     } // namespace detail
 
-    desktop_entry::desktop_entry() = default;
+    std::shared_ptr<desktop_entry> desktop_entry::create(std::istream &is) {
+        return std::make_shared<desktop_entry_wrapper>(is);
+    }
 
-    desktop_entry::desktop_entry(std::istream &is) : desktop_entry() {
+    std::shared_ptr<desktop_entry> desktop_entry::create(std::filesystem::path store,
+        std::filesystem::path relative_path) {
+        return std::make_shared<desktop_entry_wrapper>(store, relative_path);
+    }
+
+    desktop_entry::desktop_entry(std::istream &is) {
         detail::desktop_entry_parser parser {*this};
         parser.parse(is);
         if (is.fail()) {
@@ -265,11 +279,7 @@ namespace xdg::desktop_entry_spec {
         }
     }
 
-    desktop_entry::desktop_entry(std::istream &&is) : desktop_entry(is) {
-        if (!check_required_keys()) {
-            throw std::runtime_error("desktop_entry has missing keys");
-        }
-    }
+    desktop_entry::desktop_entry(std::istream &&is) : desktop_entry(is) { }
 
     desktop_entry::desktop_entry(path store, path relative_path) :
             desktop_entry(std::ifstream(store / relative_path)) {
@@ -333,9 +343,9 @@ namespace xdg::desktop_entry_spec {
         return true;
     }
 
-    std::vector<std::unique_ptr<desktop_entry>> get_all_desktop_entries() {
+    std::vector<std::shared_ptr<desktop_entry>> get_all_desktop_entries() {
         std::unordered_set<std::string> ids_read;
-        std::vector<std::unique_ptr<desktop_entry>> result;
+        std::vector<std::shared_ptr<desktop_entry>> result;
 
         for (auto &application_dir : xdg::basedir::data_dir_iterator()) {
             application_dir /= "applications";
@@ -346,9 +356,9 @@ namespace xdg::desktop_entry_spec {
                         continue;
                     }
 
-                    std::unique_ptr<desktop_entry> entry;
+                    std::shared_ptr<desktop_entry> entry;
                     try {
-                        entry = std::make_unique<desktop_entry>(application_dir,
+                        entry = desktop_entry::create(application_dir,
                             file.path().lexically_relative(application_dir));
                     } catch (const std::runtime_error &ex) {
                         // TODO: Specific exception

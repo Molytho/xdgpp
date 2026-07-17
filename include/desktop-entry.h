@@ -171,8 +171,8 @@ namespace xdg::desktop_entry_spec {
 
     class API_PUBLIC desktop_entry {
     public:
-        desktop_entry(std::istream &is);
-        desktop_entry(std::filesystem::path store, std::filesystem::path relative_path);
+        static std::shared_ptr<desktop_entry> create(std::istream &is);
+        static std::shared_ptr<desktop_entry> create(std::filesystem::path store, std::filesystem::path relative_path);
 
         entry_type get_type() const noexcept {
             return std::any_cast<entry_type>(get_well_known_value(well_known_keys::Type));
@@ -234,7 +234,9 @@ namespace xdg::desktop_entry_spec {
             return get_well_known_bool<false>(well_known_keys::Terminal);
         }
 
-        const std::vector<std::shared_ptr<application_action>> &get_actions() const noexcept { return m_actions; }
+        const std::vector<std::shared_ptr<application_action>> &get_actions() const noexcept {
+            return m_actions;
+        }
 
         const std::vector<std::string> *get_actions_key() const noexcept {
             return get_well_known_typed<std::vector<std::string>>(well_known_keys::Actions);
@@ -297,8 +299,11 @@ namespace xdg::desktop_entry_spec {
             launch(std::forward<F>(launcher), {}, false);
         }
 
+    protected:
+        desktop_entry(std::istream &is);
+        desktop_entry(std::filesystem::path store, std::filesystem::path relative_path);
+
     private:
-        desktop_entry();
         desktop_entry(std::istream &&is);
 
         bool check_required_keys() const noexcept;
@@ -352,6 +357,6 @@ namespace xdg::desktop_entry_spec {
         std::vector<std::shared_ptr<application_action>> m_actions {};
     };
 
-    API_PUBLIC std::vector<std::unique_ptr<desktop_entry>> get_all_desktop_entries();
+    API_PUBLIC std::vector<std::shared_ptr<desktop_entry>> get_all_desktop_entries();
 } // namespace xdg::desktop_entry_spec
 #endif
