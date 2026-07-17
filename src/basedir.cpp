@@ -97,4 +97,58 @@ namespace xdg::basedir {
         return env ? check_for_absolute_path(env, XdgRuntimeDirVariable)
                    : throw mandatory_environment_variable_missing(XdgRuntimeDirVariable);
     }
+
+
+    data_dir_iterator::data_dir_iterator() : m_paths() {
+        auto system_dirs = xdg::basedir::get_data_dirs();
+        m_paths.reserve(system_dirs.size() + 1);
+        m_paths.insert(m_paths.cend(),
+            std::move_iterator(system_dirs.rbegin()),
+            std::move_iterator(system_dirs.rend()));
+        m_paths.emplace_back(get_data_home());
+    }
+
+    data_dir_iterator::data_dir_iterator(const data_dir_iterator &) = default;
+
+    data_dir_iterator::data_dir_iterator(data_dir_iterator &&other) noexcept :
+            m_paths(std::move(other.m_paths)) { }
+
+    data_dir_iterator &data_dir_iterator::operator=(const data_dir_iterator &rhs) {
+        m_paths = rhs.m_paths;
+        return *this;
+    }
+
+    data_dir_iterator &data_dir_iterator::operator=(data_dir_iterator &&rhs) noexcept {
+        m_paths = std::move(rhs.m_paths);
+        return *this;
+    }
+
+    std::filesystem::path &data_dir_iterator::operator*() {
+        assert(!m_paths.empty());
+        return m_paths.back();
+    }
+
+    std::filesystem::path *data_dir_iterator::operator->() {
+        assert(!m_paths.empty());
+        return std::addressof(m_paths.back());
+    }
+
+    data_dir_iterator &data_dir_iterator::operator++() {
+        assert(!m_paths.empty());
+        m_paths.pop_back();
+        return *this;
+    }
+
+    bool data_dir_iterator::operator==(std::default_sentinel_t) const noexcept {
+        return m_paths.empty();
+    }
+
+    data_dir_iterator begin(data_dir_iterator it) {
+        return it;
+    }
+
+    std::default_sentinel_t end(const data_dir_iterator &) {
+        return {};
+    }
+
 } // namespace xdg::basedir

@@ -5,7 +5,6 @@
 #include <cassert>
 #include <cstdlib>
 #include <filesystem>
-#include <forward_list>
 #include <fstream>
 #include <optional>
 #include <string_view>
@@ -52,44 +51,6 @@ namespace {
     static_assert(std::ranges::is_sorted(well_known_keys_name));
 
     constexpr std::array entry_type_name {"Application"sv, "Link"sv, "Directory"sv};
-
-    class xdg_data_dir_iterator {
-        std::forward_list<path> m_str;
-
-    public:
-        xdg_data_dir_iterator() : m_str({xdg::basedir::get_data_home()}) {
-            auto dirs = xdg::basedir::get_data_dirs();
-            m_str.insert_after(m_str.begin(),
-                std::make_move_iterator(dirs.begin()),
-                std::make_move_iterator(dirs.end()));
-        }
-
-        path &operator*() {
-            assert(!m_str.empty());
-            return m_str.front();
-        }
-
-        path *operator->() {
-            assert(!m_str.empty());
-            return std::addressof(m_str.front());
-        }
-
-        xdg_data_dir_iterator &operator++() {
-            assert(!m_str.empty());
-            m_str.pop_front();
-            return *this;
-        }
-
-        bool operator==(std::default_sentinel_t) const noexcept { return m_str.empty(); }
-    };
-
-    xdg_data_dir_iterator begin(xdg_data_dir_iterator it) {
-        return it;
-    }
-
-    std::default_sentinel_t end(const xdg_data_dir_iterator &) {
-        return {};
-    }
 
     class alternative_locales_iterator {
         std::string_view m_modifier;
@@ -376,7 +337,7 @@ namespace xdg::desktop_entry_spec {
         std::unordered_set<std::string> ids_read;
         std::vector<std::unique_ptr<desktop_entry>> result;
 
-        for (auto &application_dir : xdg_data_dir_iterator()) {
+        for (auto &application_dir : xdg::basedir::data_dir_iterator()) {
             application_dir /= "applications";
             try {
                 for (const auto &file : recursive_directory_iterator(application_dir,
