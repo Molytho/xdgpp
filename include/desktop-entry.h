@@ -108,8 +108,10 @@ namespace xdg::desktop_entry_spec {
         std::string make_command_line(std::string_view exec, std::string_view name,
             std::vector<std::string> launch_args, bool are_uri);
 
+        std::string_view launch_impl_get_path(const application_action *action);
         std::string_view launch_impl_get_path(const desktop_entry *entry);
 
+        bool launch_impl_get_terminal(const application_action *action);
         bool launch_impl_get_terminal(const desktop_entry *entry);
 
         template<class Derived>
@@ -137,7 +139,7 @@ namespace xdg::desktop_entry_spec {
                 launch(std::forward<F>(launcher), {}, false);
             }
         };
-    } // namespace detail
+    } // namespace API_PUBLIC detail
 } // namespace xdg::desktop_entry_spec
 
 namespace xdg::desktop_entry_spec {
@@ -193,9 +195,9 @@ namespace xdg::desktop_entry_spec {
     using localized_string      = detail::localized_data<std::string>;
     using localized_string_list = detail::localized_data<std::vector<std::string>>;
 
-    class application_action {
+    class application_action : public detail::launch_impl<application_action> {
     public:
-        application_action(std::string id);
+        application_action(std::weak_ptr<desktop_entry> entry, std::string id);
 
         const std::string &get_id() const noexcept { return m_id; }
 
@@ -205,9 +207,12 @@ namespace xdg::desktop_entry_spec {
 
         const std::string &get_exec() const noexcept { return m_exec; }
 
+        std::shared_ptr<desktop_entry> try_get_entry() const { return m_entry.lock(); }
+
     private:
         friend detail::desktop_entry_parser;
 
+        std::weak_ptr<desktop_entry> m_entry;
         std::string m_id;
         localized_string m_name;
         std::unique_ptr<localized_string> m_icon;
@@ -215,9 +220,15 @@ namespace xdg::desktop_entry_spec {
     };
 
     class API_PUBLIC desktop_entry : public detail::launch_impl<desktop_entry> {
+        struct constructor_tag {
+            explicit constructor_tag() = default;
+        };
+
     public:
-        static std::shared_ptr<desktop_entry> create(std::istream &is);
-        static std::shared_ptr<desktop_entry> create(std::filesystem::path store, std::filesystem::path relative_path);
+        static std::shared_ptr<desktop_entry> create();
+        static std::shared_ptr<desktop_entry> from_istream(std::istream &is);
+        static std::shared_ptr<desktop_entry> from_store(std::filesystem::path store,
+            std::filesystem::path relative_path);
 
         entry_type get_type() const noexcept {
             return std::any_cast<entry_type>(get_well_known_value(well_known_keys::Type));
@@ -327,13 +338,11 @@ namespace xdg::desktop_entry_spec {
 
         bool should_show() const;
 
-    protected:
-        desktop_entry(std::istream &is);
-        desktop_entry(std::filesystem::path store, std::filesystem::path relative_path);
+        friend std::istream &operator>>(std::istream &is, const std::shared_ptr<desktop_entry> &entry);
+
+        desktop_entry(constructor_tag);
 
     private:
-        desktop_entry(std::istream &&is);
-
         bool check_required_keys() const noexcept;
 
         constexpr const std::any &get_well_known_value(well_known_keys val) const noexcept {

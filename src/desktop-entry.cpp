@@ -104,13 +104,6 @@ namespace {
     constexpr std::default_sentinel_t end(const alternative_locales_iterator &) {
         return {};
     }
-
-    class desktop_entry_wrapper : public desktop_entry {
-    public:
-        template<class... Args>
-        desktop_entry_wrapper(Args &&...args) noexcept(std::is_nothrow_constructible_v<desktop_entry, Args...>) :
-                desktop_entry(std::forward<Args>(args)...) { }
-    };
 } // namespace
 
 namespace xdg::desktop_entry_spec {
@@ -278,8 +271,24 @@ namespace xdg::desktop_entry_spec {
             return cmdline;
         }
 
+        std::string_view launch_impl_get_path(const application_action *action) {
+            auto entry = action->try_get_entry();
+            if (!entry) {
+                throw std::runtime_error("desktop_entry of application_action already destroyed");
+            }
+            return entry->get_path();
+        }
+
         std::string_view launch_impl_get_path(const desktop_entry *entry) {
             return entry->get_path();
+        }
+
+        bool launch_impl_get_terminal(const application_action *action) {
+            auto entry = action->try_get_entry();
+            if (!entry) {
+                throw std::runtime_error("desktop_entry of application_action already destroyed");
+            }
+            return entry->get_terminal();
         }
 
         bool launch_impl_get_terminal(const desktop_entry *entry) {
@@ -287,33 +296,30 @@ namespace xdg::desktop_entry_spec {
         }
     } // namespace detail
 
-    std::shared_ptr<desktop_entry> desktop_entry::create(std::istream &is) {
-        return std::make_shared<desktop_entry_wrapper>(is);
+    std::shared_ptr<desktop_entry> desktop_entry::create() {
+        return std::make_shared<desktop_entry>(constructor_tag {});
     }
 
-    std::shared_ptr<desktop_entry> desktop_entry::create(std::filesystem::path store,
-        std::filesystem::path relative_path) {
-        return std::make_shared<desktop_entry_wrapper>(store, relative_path);
-    }
-
-    desktop_entry::desktop_entry(std::istream &is) {
-        detail::desktop_entry_parser parser {*this};
-        parser.parse(is);
+    std::shared_ptr<desktop_entry> desktop_entry::from_istream(std::istream &is) {
+        auto entry = desktop_entry::create();
+        is >> entry;
         if (is.fail()) {
-            throw std::runtime_error("Parsing failed");
+            throw std::runtime_error("Parsing desktop_entry failed");
         }
-        if (!check_required_keys()) {
-            throw std::runtime_error("desktop_entry has missing keys");
-        }
+        return entry;
     }
 
-    desktop_entry::desktop_entry(std::istream &&is) : desktop_entry(is) { }
+    std::shared_ptr<desktop_entry> desktop_entry::from_store(std::filesystem::path store,
+        std::filesystem::path relative_path) {
+        std::ifstream is {store / relative_path};
 
-    desktop_entry::desktop_entry(path store, path relative_path) :
-            desktop_entry(std::ifstream(store / relative_path)) {
-        m_store         = std::move(store);
-        m_relative_path = std::move(relative_path);
+        auto entry             = desktop_entry::from_istream(is);
+        entry->m_store         = std::move(store);
+        entry->m_relative_path = std::move(relative_path);
+        return entry;
     }
+
+    desktop_entry::desktop_entry(constructor_tag) { }
 
     bool desktop_entry::check_required_keys() const noexcept {
         return get_well_known_value(well_known_keys::Type).has_value()
@@ -351,6 +357,15 @@ namespace xdg::desktop_entry_spec {
         return true;
     }
 
+    std::istream &operator>>(std::istream &is, const std::shared_ptr<desktop_entry> &entry) {
+        detail::desktop_entry_parser parser {entry};
+        parser.parse(is);
+        if (!entry->check_required_keys()) {
+            is.setstate(std::ios_base::failbit);
+        }
+        return is;
+    }
+
     std::vector<std::shared_ptr<desktop_entry>> get_all_desktop_entries() {
         std::unordered_set<std::string> ids_read;
         std::vector<std::shared_ptr<desktop_entry>> result;
@@ -366,7 +381,7 @@ namespace xdg::desktop_entry_spec {
 
                     std::shared_ptr<desktop_entry> entry;
                     try {
-                        entry = desktop_entry::create(application_dir,
+                        entry = desktop_entry::from_store(application_dir,
                             file.path().lexically_relative(application_dir));
                     } catch (const std::runtime_error &ex) {
                         // TODO: Specific exception
@@ -390,5 +405,8 @@ namespace xdg::desktop_entry_spec {
         return result;
     }
 
-    application_action::application_action(std::string id) : m_id(std::move(id)) { }
+    application_action::application_action(std::weak_ptr<desktop_entry> entry, std::string id) :
+            m_entry(std::move(entry)), m_id(std::move(id)) {
+        assert(!m_entry.expired());
+    }
 } // namespace xdg::desktop_entry_spec

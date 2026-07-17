@@ -290,8 +290,9 @@ namespace xdg::desktop_entry_spec::detail {
                 m_skip_section = true;
                 return;
             }
-            m_target.m_actions.emplace_back(std::make_shared<application_action>(std::string(action_name)));
-            m_current_action = m_target.m_actions.back().get();
+            m_target->m_actions.emplace_back(std::make_shared<application_action>(m_target,
+                std::string(action_name)));
+            m_current_action = m_target->m_actions.back().get();
         }
     }
 
@@ -299,7 +300,7 @@ namespace xdg::desktop_entry_spec::detail {
         auto parse_result = parse_key_value(line);
         if (m_is_main_section) {
             if (auto well_known_key = well_known_keys_from_string(parse_result.key); well_known_key) {
-                parse_well_know_key_into(*well_known_key, parse_result, m_target.get_well_known_value(*well_known_key));
+                parse_well_know_key_into(*well_known_key, parse_result, m_target->get_well_known_value(*well_known_key));
             } else {
                 // TODO
             }
@@ -331,22 +332,22 @@ namespace xdg::desktop_entry_spec::detail {
     }
 
     bool desktop_entry_parser::entry_has_action(std::string_view str) {
-        auto actions = m_target.get_actions_key();
+        auto actions = m_target->get_actions_key();
         if (!actions) {
             return false;
         }
-        return std::ranges::find(*m_target.get_actions_key(), str) != actions->end();
+        return std::ranges::find(*m_target->get_actions_key(), str) != actions->end();
     }
 
     void desktop_entry_parser::check_for_required_keys() {
         bool valid = true;
         if (m_is_main_section) {
-            valid = key_is_valid(m_target.get_type())
-                    && key_is_valid(m_target.get_name())
-                    && (m_target.get_type() != entry_type::Link || key_is_valid(m_target.get_url()));
+            valid = key_is_valid(m_target->get_type())
+                    && key_is_valid(m_target->get_name())
+                    && (m_target->get_type() != entry_type::Link || key_is_valid(m_target->get_url()));
         } else if (m_current_action) {
             valid = key_is_valid(m_current_action->m_name)
-                    && (m_target.get_dbus_activatable() || key_is_valid(m_current_action->m_exec));
+                    && (m_target->get_dbus_activatable() || key_is_valid(m_current_action->m_exec));
         }
 
         if (!valid) {
@@ -354,7 +355,8 @@ namespace xdg::desktop_entry_spec::detail {
         }
     }
 
-    desktop_entry_parser::desktop_entry_parser(desktop_entry &target) : m_target(target) { }
+    desktop_entry_parser::desktop_entry_parser(std::shared_ptr<desktop_entry> target) :
+            m_target(std::move(target)) { }
 
     void desktop_entry_parser::parse(std::istream &is) try {
         for (std::string line; std::getline(is, line);) {

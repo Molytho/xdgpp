@@ -5,7 +5,7 @@
 
 namespace xdg::desktop_entry_spec::detail {
     class desktop_entry_parser {
-        desktop_entry &m_target;
+        std::shared_ptr<desktop_entry> m_target;
 
         bool m_is_main_section {false};
         bool m_skip_section {false};
@@ -19,7 +19,7 @@ namespace xdg::desktop_entry_spec::detail {
         void check_for_required_keys();
 
     public:
-        desktop_entry_parser(desktop_entry &target);
+        desktop_entry_parser(std::shared_ptr<desktop_entry> target);
 
         void parse(std::istream &is);
     };

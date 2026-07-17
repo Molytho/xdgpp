@@ -11,7 +11,19 @@ int main(int, char **) {
         [[maybe_unused]] auto res = it->should_show();
         auto actions              = it->get_actions();
         if (!actions.empty()) {
-            std::cout << actions.at(0)->get_name().get() << '\n';
+            auto &action = actions.at(0);
+            std::cout << action->get_name().get() << '\n';
+            action->launch([&](const xdg::desktop_entry_spec::launch_parameters &params) {
+                std::cout
+                    << "Cmdline: "
+                    << params.command_list
+                    << "\nWorking Directory: "
+                    << params.working_directory
+                    << "\nStart in Terminal: "
+                    << std::boolalpha
+                    << params.terminal
+                    << '\n';
+            });
         }
         std::cout << res << '\n';
     }
