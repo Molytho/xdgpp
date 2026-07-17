@@ -36,5 +36,17 @@ int main(int, char **) {
     [[maybe_unused]] auto exec         = entry.get_exec();
     [[maybe_unused]] auto try_exec     = entry.get_try_exec();
 
+    entry.launch([&](const xdg::desktop_entry_spec::launch_parameters &params) {
+        std::cout
+            << "Cmdline: "
+            << params.command_list
+            << "\nWorking Directory: "
+            << params.working_directory
+            << "\nStart in Terminal: "
+            << std::boolalpha
+            << params.terminal
+            << '\n';
+    });
+
     return 0;
 }

@@ -93,6 +93,53 @@ namespace xdg::desktop_entry_spec::detail {
     };
 } // namespace xdg::desktop_entry_spec::detail
 
+/* ---------- class launch_impl ---------- */
+namespace xdg::desktop_entry_spec {
+    class application_action;
+    class desktop_entry;
+
+    struct launch_parameters {
+        std::string command_list;
+        std::string_view working_directory;
+        bool terminal;
+    };
+
+    namespace API_PUBLIC detail {
+        std::string make_command_line(std::string_view exec, std::string_view name,
+            std::vector<std::string> launch_args, bool are_uri);
+
+        std::string_view launch_impl_get_path(const desktop_entry *entry);
+
+        bool launch_impl_get_terminal(const desktop_entry *entry);
+
+        template<class Derived>
+        class launch_impl {
+            const Derived *get_derived() const noexcept {
+                return static_cast<const Derived *>(this);
+            }
+
+        public:
+            template<class F>
+                requires std::is_invocable_v<F, launch_parameters &>
+            void launch(F &&launcher, std::vector<std::string> args, bool are_uris) const {
+                launch_parameters params {
+                    .command_list
+                    = make_command_line(get_derived()->get_exec(), get_derived()->get_name().get(), std::move(args), are_uris),
+                    .working_directory = launch_impl_get_path(get_derived()),
+                    .terminal          = launch_impl_get_terminal(get_derived())
+                };
+                std::invoke(std::forward<F>(launcher), params);
+            }
+
+            template<class F>
+                requires std::is_invocable_v<F, launch_parameters &>
+            void launch(F &&launcher) const {
+                launch(std::forward<F>(launcher), {}, false);
+            }
+        };
+    } // namespace detail
+} // namespace xdg::desktop_entry_spec
+
 namespace xdg::desktop_entry_spec {
     namespace detail {
         class desktop_entry_parser;
@@ -146,12 +193,6 @@ namespace xdg::desktop_entry_spec {
     using localized_string      = detail::localized_data<std::string>;
     using localized_string_list = detail::localized_data<std::vector<std::string>>;
 
-    struct launch_parameters {
-        std::string command_list;
-        std::string_view working_directory;
-        bool terminal;
-    };
-
     class application_action {
     public:
         application_action(std::string id);
@@ -173,7 +214,7 @@ namespace xdg::desktop_entry_spec {
         std::string m_exec;
     };
 
-    class API_PUBLIC desktop_entry {
+    class API_PUBLIC desktop_entry : public detail::launch_impl<desktop_entry> {
     public:
         static std::shared_ptr<desktop_entry> create(std::istream &is);
         static std::shared_ptr<desktop_entry> create(std::filesystem::path store, std::filesystem::path relative_path);
@@ -286,23 +327,6 @@ namespace xdg::desktop_entry_spec {
 
         bool should_show() const;
 
-        template<class F>
-            requires std::is_invocable_v<F, launch_parameters &>
-        void launch(F &&launcher, std::vector<std::string> args, bool are_uris) const {
-            launch_parameters params {
-                .command_list      = make_command_line(std::move(args), are_uris),
-                .working_directory = get_path(),
-                .terminal          = get_terminal()
-            };
-            std::invoke(std::forward<F>(launcher), params);
-        }
-
-        template<class F>
-            requires std::is_invocable_v<F, launch_parameters &>
-        void launch(F &&launcher) const {
-            launch(std::forward<F>(launcher), {}, false);
-        }
-
     protected:
         desktop_entry(std::istream &is);
         desktop_entry(std::filesystem::path store, std::filesystem::path relative_path);
@@ -311,8 +335,6 @@ namespace xdg::desktop_entry_spec {
         desktop_entry(std::istream &&is);
 
         bool check_required_keys() const noexcept;
-
-        std::string make_command_line(std::vector<std::string> launch_args, bool are_uri) const;
 
         constexpr const std::any &get_well_known_value(well_known_keys val) const noexcept {
             return m_well_known_keys.at(size_t(val));
