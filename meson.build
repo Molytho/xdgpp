@@ -6,7 +6,13 @@ project(
     default_options: ['warning_level=3', 'werror=true', 'cpp_std=c++20'],
 )
 
-sources = ['src/basedir.cpp', 'src/desktop-entry.cpp', 'src/desktop-entry-parser.cpp']
+sources = [
+    'src/basedir.cpp',
+    'src/desktop-entry.cpp',
+    'src/desktop-entry/types.cpp',
+    'src/desktop-entry/well-known-keys.cpp',
+    'src/desktop-entry-parser.cpp'
+]
 
 includes = [include_directories('include')]
 

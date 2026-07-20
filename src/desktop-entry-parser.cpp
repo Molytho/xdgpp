@@ -9,11 +9,13 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
 
+#include "desktop-entry/well-know-keys.h"
 #include "private/string_helper.h"
 
 using namespace std::string_view_literals;
-using namespace xdg::desktop_entry_spec;
+
 using namespace std::filesystem;
+using namespace xdg::desktop_entry_spec;
 
 namespace {
     constexpr std::string_view MainSectionName      = "Desktop Entry";
@@ -64,11 +66,9 @@ namespace {
     struct parse_as_helper;
 
     template<>
-    struct parse_as_helper<entry_type> {
-        static constexpr bool is_type(well_known_keys val) { return val == well_known_keys::Type; }
-
-        static void parse(const key_value_match &val, entry_type &out) {
-            auto parsed = entry_type_from_string(val.value);
+    struct parse_as_helper<types::entry_type> {
+        static void parse(const key_value_match &val, types::entry_type &out) {
+            auto parsed = types::entry_type_from_string(val.value);
             if (!val.locale.empty()) {
                 throw std::runtime_error("Type value cannot be localized");
             }
@@ -80,47 +80,8 @@ namespace {
     };
 
     template<>
-    struct parse_as_helper<std::string> {
-        static constexpr std::array string_types {
-            well_known_keys::Exec,
-            well_known_keys::Path,
-            well_known_keys::StartupWMClass,
-            well_known_keys::TryExec,
-            well_known_keys::URL,
-            well_known_keys::Version
-        };
-        static_assert(std::ranges::is_sorted(string_types));
-
-        static constexpr bool is_type(well_known_keys val) {
-            return std::ranges::binary_search(string_types, val);
-        }
-
-        static void parse(const key_value_match &val, std::string &out) {
-            if (!val.locale.empty()) {
-                throw std::runtime_error("String values cannot be localized");
-            }
-            out = std::string(val.value);
-        }
-    };
-
-    template<>
-    struct parse_as_helper<bool> {
-        static constexpr std::array bool_types {
-            well_known_keys::DBusActivatable,
-            well_known_keys::Hidden,
-            well_known_keys::NoDisplay,
-            well_known_keys::PrefersNonDefaultGPU,
-            well_known_keys::SingleMainWindow,
-            well_known_keys::StartupNotify,
-            well_known_keys::Terminal
-        };
-        static_assert(std::ranges::is_sorted(bool_types));
-
-        static constexpr bool is_type(well_known_keys val) {
-            return std::ranges::binary_search(bool_types, val);
-        }
-
-        static void parse(const key_value_match &val, bool &out) {
+    struct parse_as_helper<types::boolean> {
+        static void parse(const key_value_match &val, types::boolean &out) {
             if (!val.locale.empty()) {
                 throw std::runtime_error("bool values cant be localized");
             }
@@ -137,21 +98,17 @@ namespace {
     };
 
     template<>
-    struct parse_as_helper<std::vector<std::string>> {
-        static constexpr std::array string_list_types {
-            well_known_keys::Actions,
-            well_known_keys::Categories,
-            well_known_keys::Implements,
-            well_known_keys::MimeType,
-            well_known_keys::NotShowIn,
-            well_known_keys::OnlyShowIn
-        };
-        static_assert(std::ranges::is_sorted(string_list_types));
-
-        static constexpr bool is_type(well_known_keys val) {
-            return std::ranges::binary_search(string_list_types, val);
+    struct parse_as_helper<types::string> {
+        static void parse(const key_value_match &val, types::string &out) {
+            if (!val.locale.empty()) {
+                throw std::runtime_error("String values cannot be localized");
+            }
+            out = std::string(val.value);
         }
+    };
 
+    template<>
+    struct parse_as_helper<types::strings> {
         static std::vector<std::string> parse_as_vector(std::string_view value) {
             if (value.empty()) {
                 return {};
@@ -176,73 +133,75 @@ namespace {
     };
 
     template<>
-    struct parse_as_helper<localized_string> {
-        static constexpr std::array localized_string_type {
-            well_known_keys::Comment,
-            well_known_keys::GenericName,
-            well_known_keys::Icon,
-            well_known_keys::Name
-        };
-        static_assert(std::ranges::is_sorted(localized_string_type));
-
-        static constexpr bool is_type(well_known_keys val) {
-            return std::ranges::binary_search(localized_string_type, val);
-        }
-
-        static void parse(const key_value_match &val, localized_string &out) {
+    struct parse_as_helper<types::localestring> {
+        static void parse(const key_value_match &val, types::localestring &out) {
             out.add(val.locale, std::string(val.value));
         }
     };
 
     template<>
-    struct parse_as_helper<localized_string_list> {
-        static constexpr bool is_type(well_known_keys val) {
-            return val == well_known_keys::Keywords;
-        }
-
-        static void parse(const key_value_match &val, localized_string_list &out) {
+    struct parse_as_helper<types::localestrings> {
+        static void parse(const key_value_match &val, types::localestrings &out) {
             auto parsed = parse_as_helper<std::vector<std::string>>::parse_as_vector(val.value);
             out.add(val.locale, std::move(parsed));
         }
     };
 
-    template<class T, class... Args>
-    void parse_into_impl(well_known_keys key, const key_value_match &val, std::any &out) {
-        if (parse_as_helper<T>::is_type(key)) {
-            if (!out.has_value()) {
-                out = T();
-            }
-            parse_as_helper<T>::parse(val, std::any_cast<T &>(out));
-        } else {
-            if constexpr (sizeof...(Args) > 0) {
-                parse_into_impl<Args...>(key, val, out);
-            } else {
-                throw std::runtime_error("Could not parse key");
-            }
+    template<class... Args>
+    consteval bool storage_contains_key(well_known_keys key) {
+        std::array keys = {Args::key...};
+        auto it         = std::ranges::find(keys, key);
+        return it != keys.end();
+    }
+
+#define DEFINE_PARSE_CASE(key)                                                       \
+    case well_known_keys::key:                                                       \
+        if constexpr (storage_contains_key<Args...>(well_known_keys::key)) {         \
+            parse_as_helper<well_known_key_type_t<well_known_keys::key>>::parse(val, \
+                storage.template get<well_known_keys::key>().init_and_get());        \
+            return true;                                                             \
+        }                                                                            \
+        return false;
+
+    template<class... Args>
+    bool parse_well_know_key_into(well_known_keys key, const key_value_match &val,
+        well_known_key_storage<Args...> &storage) {
+        switch (key) {
+            DEFINE_PARSE_CASE(Actions)
+            DEFINE_PARSE_CASE(Categories)
+            DEFINE_PARSE_CASE(Comment)
+            DEFINE_PARSE_CASE(DBusActivatable)
+            DEFINE_PARSE_CASE(Exec)
+            DEFINE_PARSE_CASE(GenericName)
+            DEFINE_PARSE_CASE(Hidden)
+            DEFINE_PARSE_CASE(Icon)
+            DEFINE_PARSE_CASE(Implements)
+            DEFINE_PARSE_CASE(Keywords)
+            DEFINE_PARSE_CASE(MimeType)
+            DEFINE_PARSE_CASE(Name)
+            DEFINE_PARSE_CASE(NoDisplay)
+            DEFINE_PARSE_CASE(NotShowIn)
+            DEFINE_PARSE_CASE(OnlyShowIn)
+            DEFINE_PARSE_CASE(Path)
+            DEFINE_PARSE_CASE(PrefersNonDefaultGPU)
+            DEFINE_PARSE_CASE(SingleMainWindow)
+            DEFINE_PARSE_CASE(StartupNotify)
+            DEFINE_PARSE_CASE(StartupWMClass)
+            DEFINE_PARSE_CASE(Terminal)
+            DEFINE_PARSE_CASE(TryExec)
+            DEFINE_PARSE_CASE(Type)
+            DEFINE_PARSE_CASE(URL)
+            DEFINE_PARSE_CASE(Version)
+        default:
+            std::abort();
         }
     }
 
-    void parse_well_know_key_into(well_known_keys key, const key_value_match &val, std::any &out) {
-        parse_into_impl<entry_type, std::string, bool, std::vector<std::string>, localized_string, localized_string_list>(key,
-            val,
-            out);
-    }
+#undef DEFINE_PARSE_CASE
 
-    template<class T>
-    void parse_well_know_key(well_known_keys key, const key_value_match &val, T &out) {
-        if (!parse_as_helper<T>::is_type(key)) {
-            throw std::logic_error("Tried to parse well know key with wrong type");
-        }
-        parse_as_helper<T>::parse(val, out);
-    }
-
-    bool key_is_valid(entry_type type) noexcept {
-        return type >= xdg::desktop_entry_spec::entry_type::First
-               && type <= xdg::desktop_entry_spec::entry_type::Last;
-    }
-
-    bool key_is_valid(const std::string &str) noexcept {
-        return !str.empty();
+    bool key_is_valid(types::entry_type type) noexcept {
+        return type >= xdg::desktop_entry_spec::types::entry_type::First
+               && type <= xdg::desktop_entry_spec::types::entry_type::Last;
     }
 
     bool key_is_valid(std::string_view view) noexcept {
@@ -253,11 +212,11 @@ namespace {
         return !vec.empty();
     }
 
-    bool key_is_valid(const localized_string &lstr) noexcept {
+    bool key_is_valid(const types::localestring &lstr) noexcept {
         return !lstr.get("").empty();
     }
 
-    [[maybe_unused]] bool key_is_valid(const localized_string_list &lstrlist) noexcept {
+    [[maybe_unused]] bool key_is_valid(const types::localestrings &lstrlist) noexcept {
         return !lstrlist.get("").empty();
     }
 
@@ -300,30 +259,21 @@ namespace xdg::desktop_entry_spec::detail {
         auto parse_result = parse_key_value(line);
         if (m_is_main_section) {
             if (auto well_known_key = well_known_keys_from_string(parse_result.key); well_known_key) {
-                parse_well_know_key_into(*well_known_key, parse_result, m_target->get_well_known_value(*well_known_key));
+                if (well_known_key == well_known_keys::Actions) {
+                    parse_as_helper<types::strings>::parse(parse_result, m_registered_actions);
+                } else {
+                    [[maybe_unused]] bool handled
+                        = parse_well_know_key_into(*well_known_key, parse_result, m_target->m_storage);
+                    // TODO: handled != true
+                }
             } else {
                 // TODO
             }
         } else if (m_current_action) {
             if (auto well_known_key = well_known_keys_from_string(parse_result.key); well_known_key) {
-                switch (*well_known_key) {
-                case well_known_keys::Name:
-                    parse_well_know_key(well_known_keys::Name, parse_result, m_current_action->m_name);
-                    return;
-                case well_known_keys::Icon:
-                    if (!m_current_action->m_icon) {
-                        m_current_action->m_icon = std::make_unique<localized_string>();
-                    }
-                    parse_well_know_key(well_known_keys::Icon, parse_result, *m_current_action->m_icon);
-                    return;
-                case well_known_keys::Exec:
-                    parse_well_know_key<std::string>(well_known_keys::Exec,
-                        parse_result,
-                        m_current_action->m_exec);
-                    return;
-                default:
-                    break;
-                }
+                [[maybe_unused]] bool handled
+                    = parse_well_know_key_into(*well_known_key, parse_result, m_current_action->m_storage);
+                // TODO: handled != true
             }
             // TODO: else and fallthrough
         } else {
@@ -332,11 +282,7 @@ namespace xdg::desktop_entry_spec::detail {
     }
 
     bool desktop_entry_parser::entry_has_action(std::string_view str) {
-        auto actions = m_target->get_actions_key();
-        if (!actions) {
-            return false;
-        }
-        return std::ranges::find(*m_target->get_actions_key(), str) != actions->end();
+        return std::ranges::find(m_registered_actions, str) != m_registered_actions.end();
     }
 
     void desktop_entry_parser::check_for_required_keys() {
@@ -344,10 +290,10 @@ namespace xdg::desktop_entry_spec::detail {
         if (m_is_main_section) {
             valid = key_is_valid(m_target->get_type())
                     && key_is_valid(m_target->get_name())
-                    && (m_target->get_type() != entry_type::Link || key_is_valid(m_target->get_url()));
+                    && (m_target->get_type() != types::entry_type::Link || key_is_valid(m_target->get_url()));
         } else if (m_current_action) {
-            valid = key_is_valid(m_current_action->m_name)
-                    && (m_target->get_dbus_activatable() || key_is_valid(m_current_action->m_exec));
+            valid = key_is_valid(m_current_action->get_name())
+                    && (m_target->get_dbus_activatable() || key_is_valid(m_current_action->get_exec()));
         }
 
         if (!valid) {

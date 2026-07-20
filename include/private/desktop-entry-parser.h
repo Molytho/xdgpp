@@ -1,5 +1,5 @@
 #ifndef LIB_XDGPP_DESKTOP_ENTRY_PARSER_H
-# define LIB_XDGPP_DESKTOP_ENTRY_PARSER_H
+#define LIB_XDGPP_DESKTOP_ENTRY_PARSER_H
 
 #include "desktop-entry.h"
 
@@ -10,6 +10,7 @@ namespace xdg::desktop_entry_spec::detail {
         bool m_is_main_section {false};
         bool m_skip_section {false};
         std::string m_current_section {};
+        std::vector<std::string> m_registered_actions;
         application_action *m_current_action {};
 
         void update_current_section(std::string_view section);
@@ -23,6 +24,6 @@ namespace xdg::desktop_entry_spec::detail {
 
         void parse(std::istream &is);
     };
-}
+} // namespace xdg::desktop_entry_spec::detail
 
 #endif

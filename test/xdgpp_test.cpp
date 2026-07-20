@@ -1,6 +1,10 @@
 #include "desktop-entry.h"
 
+#include <desktop-entry/well-know-keys.h>
+
 #include <iostream>
+
+using namespace xdg::desktop_entry_spec;
 
 int main(int, char **) {
     auto all = xdg::desktop_entry_spec::get_all_desktop_entries();
