@@ -91,13 +91,13 @@ namespace xdg::desktop_entry_spec {
         T m_value;
 
     public:
-        explicit operator bool() const noexcept { return true; }
+        constexpr explicit operator bool() const noexcept { return true; }
 
-        operator const T &() const & noexcept { return m_value; }
+        constexpr operator const T &() const & noexcept { return m_value; }
 
-        const T &get() const noexcept { return m_value; }
+        constexpr const T &get() const noexcept { return m_value; }
 
-        T &init_and_get() noexcept { return m_value; }
+        constexpr T &init_and_get() noexcept { return m_value; }
     };
 
     template<class T>
@@ -130,13 +130,13 @@ namespace xdg::desktop_entry_spec {
         bool m_set;
 
     public:
-        explicit operator bool() const noexcept { return m_set; }
+        constexpr explicit operator bool() const noexcept { return m_set; }
 
-        bool get() const noexcept { return m_value; }
+        constexpr bool get() const noexcept { return m_value; }
 
-        bool get_or_default(bool def) const noexcept { return m_set ? m_value : def; }
+        constexpr bool get_or_default(bool def) const noexcept { return m_set ? m_value : def; }
 
-        bool &init_and_get() noexcept {
+        constexpr bool &init_and_get() noexcept {
             if (!m_set) {
                 m_set = true;
             }
@@ -157,25 +157,12 @@ namespace xdg::desktop_entry_spec {
     };
 
     namespace detail {
-        template<well_known_keys key, size_t I = 0, class... Args>
-        struct well_known_key_index_impl {
-            static_assert("Tried to get key which is not contained");
-        };
-
-        template<well_known_keys key, size_t I, class... Args>
-        struct well_known_key_index_impl<key, I, optional<key>, Args...> :
-                public std::integral_constant<size_t, I> { };
-
-        template<well_known_keys key, size_t I, class... Args>
-        struct well_known_key_index_impl<key, I, required<key>, Args...> :
-                public std::integral_constant<size_t, I> { };
-
-        template<well_known_keys key, size_t I, class T, class... Args>
-        struct well_known_key_index_impl<key, I, T, Args...> :
-                public well_known_key_index_impl<key, I + 1, Args...> { };
-
-        template<well_known_keys key, class... Args>
-        using well_known_key_index = well_known_key_index_impl<key, 0, Args...>;
+        template<class... Args>
+        constexpr size_t calculate_well_known_key_index(well_known_keys key) {
+            std::array keys {Args::key...};
+            auto it = std::ranges::find(keys, key);
+            return it != keys.end() ? std::distance(keys.begin(), it) : -1;
+        }
     } // namespace detail
 
     template<class... Ts>
@@ -184,13 +171,23 @@ namespace xdg::desktop_entry_spec {
 
     public:
         template<well_known_keys key>
-        decltype(auto) get() const {
-            return std::get<detail::well_known_key_index<key, Ts...>::value>(m_storage);
+        constexpr decltype(auto) get() const {
+            constexpr size_t Index = detail::calculate_well_known_key_index<Ts...>(key);
+            if constexpr (Index != -1) {
+                return std::get<Index>(m_storage);
+            } else {
+                throw std::logic_error("Tried to get well_know_key that is not contained");
+            }
         }
 
         template<well_known_keys key>
-        decltype(auto) get() {
-            return std::get<detail::well_known_key_index<key, Ts...>::value>(m_storage);
+        constexpr decltype(auto) get() {
+            constexpr size_t Index = detail::calculate_well_known_key_index<Ts...>(key);
+            if constexpr (Index != -1) {
+                return std::get<Index>(m_storage);
+            } else {
+                throw std::logic_error("Tried to get well_know_key that is not contained");
+            }
         }
     };
 

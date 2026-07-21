@@ -40,28 +40,32 @@ namespace xdg::desktop_entry_spec {
             return cmdline;
         }
 
-        std::string_view launch_impl_get_path(const application_action *action) {
-            auto entry = action->try_get_entry();
+        template<>
+        API_PUBLIC std::string_view launch_impl<application_action>::get_path() const {
+            auto entry = get_derived()->try_get_entry();
             if (!entry) {
                 throw std::runtime_error("desktop_entry of application_action already destroyed");
             }
             return entry->get_path();
         }
 
-        std::string_view launch_impl_get_path(const desktop_entry *entry) {
-            return entry->get_path();
+        template<>
+        API_PUBLIC std::string_view launch_impl<desktop_entry>::get_path() const {
+            return get_derived()->get_path();
         }
 
-        bool launch_impl_get_terminal(const application_action *action) {
-            auto entry = action->try_get_entry();
+        template<>
+        API_PUBLIC bool launch_impl<application_action>::get_terminal() const {
+            auto entry = get_derived()->try_get_entry();
             if (!entry) {
                 throw std::runtime_error("desktop_entry of application_action already destroyed");
             }
             return entry->get_terminal();
         }
 
-        bool launch_impl_get_terminal(const desktop_entry *entry) {
-            return entry->get_terminal();
+        template<>
+        API_PUBLIC bool launch_impl<desktop_entry>::get_terminal() const {
+            return get_derived()->get_terminal();
         }
     } // namespace detail
 

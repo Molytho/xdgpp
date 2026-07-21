@@ -13,9 +13,6 @@
 
 /* ---------- class launch_impl ---------- */
 namespace xdg::desktop_entry_spec {
-    class application_action;
-    class desktop_entry;
-
     struct launch_parameters {
         std::string command_list;
         std::string_view working_directory;
@@ -26,17 +23,14 @@ namespace xdg::desktop_entry_spec {
         std::string make_command_line(std::string_view exec, std::string_view name,
             std::vector<std::string> launch_args, bool are_uri);
 
-        std::string_view launch_impl_get_path(const application_action *action);
-        std::string_view launch_impl_get_path(const desktop_entry *entry);
-
-        bool launch_impl_get_terminal(const application_action *action);
-        bool launch_impl_get_terminal(const desktop_entry *entry);
-
         template<class Derived>
         class launch_impl {
             const Derived *get_derived() const noexcept {
                 return static_cast<const Derived *>(this);
             }
+
+            std::string_view get_path() const;
+            bool get_terminal() const;
 
         public:
             template<class F>
@@ -45,8 +39,8 @@ namespace xdg::desktop_entry_spec {
                 launch_parameters params {
                     .command_list
                     = make_command_line(get_derived()->get_exec(), get_derived()->get_name().get(), std::move(args), are_uris),
-                    .working_directory = launch_impl_get_path(get_derived()),
-                    .terminal          = launch_impl_get_terminal(get_derived())
+                    .working_directory = get_path(),
+                    .terminal          = get_terminal()
                 };
                 std::invoke(std::forward<F>(launcher), params);
             }
@@ -61,6 +55,8 @@ namespace xdg::desktop_entry_spec {
 } // namespace xdg::desktop_entry_spec
 
 namespace xdg::desktop_entry_spec {
+    class desktop_entry;
+
     namespace detail {
         class desktop_entry_parser;
     } // namespace detail
