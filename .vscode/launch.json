@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Launch xdgpp_test",
+            "program": "${workspaceFolder}/build/xdgpp_test",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/build/",
+            "preLaunchTask": "Meson: Build xdgpp_test:executable"
+        }
+    ]
+}
