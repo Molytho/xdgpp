@@ -193,23 +193,26 @@ namespace xdg::desktop_entry_spec {
 
     // clang-format off
     using desktop_entry_storage = well_known_key_storage<
-        required<well_known_keys::Type>,
         required<well_known_keys::Name>,
 
         optional<well_known_keys::NoDisplay>,
         optional<well_known_keys::Hidden>,
-        optional<well_known_keys::DBusActivatable>,
-        optional<well_known_keys::Terminal>,
-        optional<well_known_keys::StartupNotify>,
-        optional<well_known_keys::PrefersNonDefaultGPU>,
-        optional<well_known_keys::SingleMainWindow>,
 
         optional<well_known_keys::Version>,
         optional<well_known_keys::GenericName>,
         optional<well_known_keys::Comment>,
         optional<well_known_keys::Icon>,
         optional<well_known_keys::OnlyShowIn>,
-        optional<well_known_keys::NotShowIn>,
+        optional<well_known_keys::NotShowIn>
+    >;
+
+    using application_entry_storage = well_known_key_storage<
+        optional<well_known_keys::DBusActivatable>,
+        optional<well_known_keys::Terminal>,
+        optional<well_known_keys::StartupNotify>,
+        optional<well_known_keys::PrefersNonDefaultGPU>,
+        optional<well_known_keys::SingleMainWindow>,
+
         optional<well_known_keys::TryExec>,
         optional<well_known_keys::Exec>,
         optional<well_known_keys::Path>,
@@ -218,14 +221,17 @@ namespace xdg::desktop_entry_spec {
         optional<well_known_keys::Categories>,
         optional<well_known_keys::Implements>,
         optional<well_known_keys::Keywords>,
-        optional<well_known_keys::StartupWMClass>,
-        optional<well_known_keys::URL>
+        optional<well_known_keys::StartupWMClass>
     >;
 
     using desktop_action_storage = well_known_key_storage<
         required<well_known_keys::Name>,
         optional<well_known_keys::Icon>,
         optional<well_known_keys::Exec>
+    >;
+
+    using link_entry_storage = well_known_key_storage<
+        required<well_known_keys::URL>
     >;
     // clang-format on
 } // namespace xdg::desktop_entry_spec

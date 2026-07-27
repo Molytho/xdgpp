@@ -7,7 +7,7 @@
 using namespace xdg::desktop_entry_spec;
 
 int main(int, char **) {
-    auto all = xdg::desktop_entry_spec::get_all_desktop_entries();
+    auto all = xdg::desktop_entry_spec::get_all_application_entries();
     if (all.empty()) {
         return 0;
     }
@@ -16,8 +16,8 @@ int main(int, char **) {
         auto actions              = it->get_actions();
         if (!actions.empty()) {
             auto &action = actions.at(0);
-            std::cout << action->get_name().get() << '\n';
-            action->launch([&](const xdg::desktop_entry_spec::launch_parameters &params) {
+            std::cout << action.get_name().get() << '\n';
+            action.launch([&](const xdg::desktop_entry_spec::launch_parameters &params) {
                 std::cout
                     << "Cmdline: "
                     << params.command_list
@@ -32,7 +32,7 @@ int main(int, char **) {
         std::cout << res << '\n';
     }
 
-    xdg::desktop_entry_spec::desktop_entry &entry = *all.front();
+    xdg::desktop_entry_spec::application_entry &entry = *all.front();
 
     [[maybe_unused]] auto type = entry.get_type();
     [[maybe_unused]] auto name = entry.get_name();

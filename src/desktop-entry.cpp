@@ -42,68 +42,53 @@ namespace xdg::desktop_entry_spec {
 
         template<>
         API_PUBLIC std::string_view launch_impl<application_action>::get_path() const {
-            auto entry = get_derived()->try_get_entry();
-            if (!entry) {
-                throw std::runtime_error("desktop_entry of application_action already destroyed");
-            }
-            return entry->get_path();
+            return get_derived()->get_entry()->get_path();
         }
 
         template<>
-        API_PUBLIC std::string_view launch_impl<desktop_entry>::get_path() const {
+        API_PUBLIC std::string_view launch_impl<application_entry>::get_path() const {
             return get_derived()->get_path();
         }
 
         template<>
         API_PUBLIC bool launch_impl<application_action>::get_terminal() const {
-            auto entry = get_derived()->try_get_entry();
-            if (!entry) {
-                throw std::runtime_error("desktop_entry of application_action already destroyed");
-            }
-            return entry->get_terminal();
+            return get_derived()->get_entry()->get_terminal();
         }
 
         template<>
-        API_PUBLIC bool launch_impl<desktop_entry>::get_terminal() const {
+        API_PUBLIC bool launch_impl<application_entry>::get_terminal() const {
             return get_derived()->get_terminal();
         }
     } // namespace detail
 
-    std::shared_ptr<desktop_entry> desktop_entry::create() {
-        return std::make_shared<desktop_entry>(constructor_tag {});
-    }
-
     std::shared_ptr<desktop_entry> desktop_entry::from_istream(std::istream &is) {
-        auto entry = desktop_entry::create();
-        is >> entry;
+        std::shared_ptr<desktop_entry> ptr;
+        is >> ptr;
         if (is.fail()) {
             throw std::runtime_error("Parsing desktop_entry failed");
         }
-        return entry;
+        assert(ptr);
+        return ptr;
     }
 
     std::shared_ptr<desktop_entry> desktop_entry::from_store(std::filesystem::path store,
         std::filesystem::path relative_path) {
         std::ifstream is {store / relative_path};
 
-        auto entry             = desktop_entry::from_istream(is);
-        entry->m_store         = std::move(store);
-        entry->m_relative_path = std::move(relative_path);
+        auto entry = application_entry::from_istream(is);
+
+        if (entry->get_type() == types::entry_type::Application) {
+            std::static_pointer_cast<application_entry>(entry)->set_id([&]() {
+                auto str = std::move(relative_path).string();
+                std::ranges::replace(str, '/', '-');
+                return str;
+            }());
+        }
+
         return entry;
     }
 
-    desktop_entry::desktop_entry(constructor_tag) { }
-
-    std::string desktop_entry::get_id() const {
-        if (m_relative_path.empty()) {
-            return {};
-        }
-        std::string res = m_relative_path.string();
-        std::ranges::replace(res, '/', '-');
-        return res;
-    }
-
-    bool desktop_entry::should_show() const {
+    bool desktop_entry::should_show() const noexcept {
         if (get_no_display() || get_hidden()) {
             return false;
         }
@@ -124,14 +109,22 @@ namespace xdg::desktop_entry_spec {
         return true;
     }
 
-    std::istream &operator>>(std::istream &is, const std::shared_ptr<desktop_entry> &entry) {
-        detail::desktop_entry_parser parser {entry};
-        parser.parse(is);
+    std::istream &operator>>(std::istream &is, std::shared_ptr<desktop_entry> &entry_ptr) {
+        entry_ptr = detail::parse_desktop_entry(is);
         return is;
     }
 
+    application_action::application_action(std::shared_ptr<const application_entry> entry,
+        std::shared_ptr<data> data) : m_entry(std::move(entry)), m_data(std::move(data)) { }
+
+    std::shared_ptr<application_entry> application_entry::create() {
+        return std::make_shared<application_entry>(constructor_tag {});
+    }
+
+    application_entry::application_entry(constructor_tag) { }
+
     std::vector<std::shared_ptr<desktop_entry>> get_all_desktop_entries() {
-        std::unordered_set<std::string> ids_read;
+        std::unordered_set<std::string> files_read;
         std::vector<std::shared_ptr<desktop_entry>> result;
 
         for (auto &application_dir : xdg::basedir::data_dir_iterator()) {
@@ -143,19 +136,18 @@ namespace xdg::desktop_entry_spec {
                         continue;
                     }
 
-                    std::shared_ptr<desktop_entry> entry;
+                    auto relative_path = file.path().lexically_relative(application_dir);
+                    if (auto [it, success] = files_read.emplace(relative_path.string()); !success) {
+                        // Already read from directory with higher priority
+                        continue;
+                    }
+
                     try {
-                        entry = desktop_entry::from_store(application_dir,
-                            file.path().lexically_relative(application_dir));
+                        result.emplace_back(desktop_entry::from_store(application_dir, relative_path));
                     } catch (const std::runtime_error &ex) {
                         // TODO: Specific exception
                         std::cerr << "Failed to parse desktop file: " << file << '\n';
                         continue;
-                    }
-                    auto emplace_res = ids_read.emplace(entry->get_id());
-                    if (emplace_res.second) {
-                        // Entry is new
-                        result.emplace_back(std::move(entry));
                     }
                 }
             } catch (const filesystem_error &ex) {
@@ -169,8 +161,13 @@ namespace xdg::desktop_entry_spec {
         return result;
     }
 
-    application_action::application_action(std::weak_ptr<desktop_entry> entry, std::string id) :
-            m_entry(std::move(entry)), m_id(std::move(id)) {
-        assert(!m_entry.expired());
+    API_PUBLIC std::vector<std::shared_ptr<application_entry>> get_all_application_entries() {
+        auto view = std::views::filter(get_all_desktop_entries(), [](const std::shared_ptr<desktop_entry> &entry) {
+            return entry->get_type() == types::entry_type::Application;
+        }) | std::views::transform([](std::shared_ptr<desktop_entry> &entry) {
+            return std::static_pointer_cast<application_entry>(std::move(entry));
+        });
+        return {begin(view), end(view)};
     }
+
 } // namespace xdg::desktop_entry_spec
