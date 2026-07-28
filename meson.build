@@ -9,6 +9,7 @@ project(
 sources = [
     'src/basedir.cpp',
     'src/desktop-entry.cpp',
+    'src/mime-apps.cpp',
     'src/desktop-entry/types.cpp',
     'src/desktop-entry/well-known-keys.cpp',
     'src/desktop-entry-parser.cpp',

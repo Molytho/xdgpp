@@ -1,15 +1,16 @@
-#include "desktop-entry.h"
-
-#include <desktop-entry/well-known-keys.h>
+#include <desktop-entry.h>
+#include <mime-apps.h>
+#include <basedir.h>
 
 #include <iostream>
 
 using namespace xdg::desktop_entry_spec;
+using namespace xdg::mime_apps;
 
-int main(int, char **) {
+void desktop_entry_stuff() {
     auto all = xdg::desktop_entry_spec::get_all_application_entries();
     if (all.empty()) {
-        return 0;
+        return;
     }
     for (const auto &it : all) {
         [[maybe_unused]] auto res = it.should_show();
@@ -63,6 +64,21 @@ int main(int, char **) {
             << params.terminal
             << '\n';
     });
+}
+
+void mime_type_stuff() {
+    auto file = xdg::basedir::get_config_home() / "mimeapps.list";
+    if (!exists(file)) {
+        return;
+    }
+    auto [default_storage, changed_storage] = parse_mimeapps_list(file);
+
+    return;
+}
+
+int main(int, char **) {
+    desktop_entry_stuff();
+    mime_type_stuff();
 
     return 0;
 }
