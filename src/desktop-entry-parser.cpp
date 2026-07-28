@@ -18,6 +18,7 @@ using namespace std::string_view_literals;
 
 using namespace std::filesystem;
 using namespace xdg::desktop_entry_spec;
+using namespace xdg::desktop_entry_spec::detail;
 
 namespace {
     constexpr std::string_view MainSectionName      = "Desktop Entry";

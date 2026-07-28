@@ -22,35 +22,24 @@ namespace xdg::desktop_entry_spec {
         std::string m_str;
 
     public:
-        constexpr locale() : m_str() { }
+        locale() : m_str() { }
 
-        constexpr explicit locale(std::string_view str) : m_str(str) { }
+        explicit locale(std::string_view str) : m_str(str) { }
 
-        constexpr explicit locale(std::string str) : m_str(str) { }
+        explicit locale(std::string str) : m_str(std::move(str)) { }
 
-        constexpr locale(const locale &other) : m_str(other.m_str) { }
+        locale(const locale &other)                = default;
+        locale &operator=(const locale &other)     = default;
+        locale(locale &&other) noexcept            = default;
+        locale &operator=(locale &&other) noexcept = default;
 
-        constexpr locale &operator=(const locale &other) {
-            m_str = other.m_str;
-            return *this;
-        }
-
-        constexpr locale(locale &&other) noexcept : m_str(std::move(other.m_str)) { }
-
-        constexpr locale &operator=(locale &&other) noexcept {
-            m_str = std::move(other.m_str);
-            return *this;
-        }
-
-        constexpr std::string_view str() const noexcept { return m_str; }
+        std::string_view str() const noexcept { return m_str; }
 
         parsed_locale parse() const noexcept;
 
         void strip_encoding();
 
-        constexpr bool operator==(const locale &other) const noexcept {
-            return m_str == other.m_str;
-        }
+        bool operator==(const locale &other) const noexcept = default;
     };
 } // namespace xdg::desktop_entry_spec
 
@@ -69,7 +58,7 @@ namespace std {
 namespace xdg::desktop_entry_spec::types {
     namespace detail {
         template<class T>
-        class localized_data {
+        class API_PUBLIC localized_data {
             T m_generic {};
             std::unordered_map<locale, T> m_translations {};
 
@@ -82,9 +71,9 @@ namespace xdg::desktop_entry_spec::types {
 
             void add_translated(std::string_view lang, T val);
 
-            API_PUBLIC const T &get() const;
+            const T &get() const;
 
-            API_PUBLIC const T &get(std::string_view locale_str) const;
+            const T &get(std::string_view locale_str) const;
         };
     } // namespace detail
 
