@@ -4,7 +4,7 @@
 #include "desktop-entry.h"
 
 namespace xdg::desktop_entry_spec::detail {
-    std::shared_ptr<desktop_entry> parse_desktop_entry(std::istream &is);
+    desktop_entry parse_desktop_entry(std::istream &is);
 } // namespace xdg::desktop_entry_spec::detail
 
 #endif

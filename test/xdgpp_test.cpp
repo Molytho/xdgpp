@@ -12,8 +12,8 @@ int main(int, char **) {
         return 0;
     }
     for (const auto &it : all) {
-        [[maybe_unused]] auto res = it->should_show();
-        auto actions              = it->get_actions();
+        [[maybe_unused]] auto res = it.should_show();
+        auto actions              = it.get_actions();
         if (!actions.empty()) {
             auto &action = actions.at(0);
             std::cout << action.get_name().get() << '\n';
@@ -32,7 +32,7 @@ int main(int, char **) {
         std::cout << res << '\n';
     }
 
-    xdg::desktop_entry_spec::application_entry &entry = *all.front();
+    xdg::desktop_entry_spec::application_entry &entry = all.front();
 
     [[maybe_unused]] auto type = entry.get_type();
     [[maybe_unused]] auto name = entry.get_name();

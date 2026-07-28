@@ -206,15 +206,15 @@ namespace {
         virtual void handle_section_change(std::string_view name) = 0;
         virtual void handle_key_value(key_value_match &key_value) = 0;
 
-        virtual std::shared_ptr<desktop_entry> get_result() && noexcept = 0;
+        virtual desktop_entry get_result() && noexcept = 0;
     };
 
     class parser_common : public parser_interface {
     protected:
-        std::shared_ptr<desktop_entry> m_entry;
+        desktop_entry m_entry;
         bool m_is_main_section {true};
 
-        parser_common(std::shared_ptr<desktop_entry> entry) : m_entry(std::move(entry)) { }
+        parser_common(desktop_entry entry) : m_entry(std::move(entry)) { }
 
         void handle_section_change(std::string_view name) override {
             m_is_main_section = name == MainSectionName;
@@ -222,7 +222,7 @@ namespace {
         }
 
         void handle_main_section_well_know_key(well_known_keys key, key_value_match &key_value) {
-            if (!parse_well_know_key_into(key, key_value, m_entry->get_storage())) {
+            if (!parse_well_know_key_into(key, key_value, m_entry.get_storage())) {
                 throw std::runtime_error("Invalid well known key");
             }
         }
@@ -251,26 +251,23 @@ namespace {
             }
         }
 
-        std::shared_ptr<desktop_entry> get_result() && noexcept final { return std::move(m_entry); }
+        desktop_entry get_result() && noexcept final { return std::move(m_entry); }
     };
 
     class parser_application_entry : public parser_common {
+        application_entry m_entry;
         bool m_skip_section {false};
-        application_action::data *m_current_action {};
+        application_action_data m_current_action {};
         std::bitset<size_t(well_known_keys::Count)> m_present_well_known_keys;
 
         types::strings m_registered_actions {};
-
-        std::shared_ptr<application_entry> get_ptr() noexcept {
-            return std::static_pointer_cast<application_entry>(m_entry);
-        }
 
         void assert_required_keys() {
             bool valid = true;
             if (m_is_main_section || m_current_action) {
                 valid = m_present_well_known_keys.test(size_t(well_known_keys::Name))
                         && (m_present_well_known_keys.test(size_t(well_known_keys::Exec))
-                            || get_ptr()->get_dbus_activatable());
+                            || m_entry.get_dbus_activatable());
             }
 
             if (!valid) {
@@ -286,7 +283,7 @@ namespace {
             assert_required_keys();
 
             m_skip_section   = false;
-            m_current_action = nullptr;
+            m_current_action = {};
             m_present_well_known_keys.reset();
 
             parser_common::handle_section_change(name);
@@ -299,15 +296,14 @@ namespace {
                     return;
                 }
 
-                auto new_action = std::make_shared<application_action::data>(std::string(action_name));
-                m_current_action = new_action.get();
-                get_ptr()->add_actions(std::move(new_action));
+                m_current_action = application_action_data {std::string(action_name)};
+                m_entry.add_actions(m_current_action);
             }
         }
 
         void handle_action_section_well_known_key(well_known_keys key, key_value_match &key_value) {
             m_present_well_known_keys.set(size_t(key));
-            if (!parse_well_know_key_into(key, key_value, m_current_action->get_storage())) {
+            if (!parse_well_know_key_into(key, key_value, m_current_action.get_storage())) {
                 throw std::runtime_error(
                     "Encountered unexpected well known key in application action section"
                 );
@@ -330,7 +326,7 @@ namespace {
             m_present_well_known_keys.set(size_t(key));
             if (key == xdg::desktop_entry_spec::well_known_keys::Actions) {
                 key_value.parse_into(m_registered_actions);
-            } else if (!parse_well_know_key_into(key, key_value, get_ptr()->get_storage())) {
+            } else if (!parse_well_know_key_into(key, key_value, m_entry.get_storage())) {
                 parser_common::handle_main_section_well_know_key(key, key_value);
             }
         }
@@ -357,7 +353,8 @@ namespace {
 
 
     public:
-        parser_application_entry() : parser_common(application_entry::create()) { }
+        parser_application_entry() :
+                parser_common(application_entry()), m_entry(parser_common::m_entry) { }
     };
 
     struct parser {
@@ -431,7 +428,7 @@ namespace {
             }
         }
 
-        std::shared_ptr<desktop_entry> parse() {
+        desktop_entry parse() {
             assert_main_section();
 
             auto type = discover_type();
@@ -457,11 +454,11 @@ namespace {
 } // namespace
 
 namespace xdg::desktop_entry_spec::detail {
-    std::shared_ptr<desktop_entry> parse_desktop_entry(std::istream &is) try {
+    desktop_entry parse_desktop_entry(std::istream &is) try {
         parser parser {is};
         return parser.parse();
     } catch (const std::runtime_error &ex) {
         is.setstate(std::ios::failbit);
-        return nullptr;
+        return {};
     }
 } // namespace xdg::desktop_entry_spec::detail
