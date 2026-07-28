@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-#include "desktop-entry/well-know-keys.h"
+#include "desktop-entry/types.h"
 #include "helper.h"
 
 /* ---------- class launch_impl ---------- */
@@ -55,10 +55,16 @@ namespace xdg::desktop_entry_spec {
 } // namespace xdg::desktop_entry_spec
 
 namespace xdg::desktop_entry_spec {
+    namespace detail {
+        class desktop_entry_data;
+        class application_action_data;
+        class application_entry_data;
+    } // namespace detail
+
     class desktop_entry;
-    class application_action_data;
-    class application_entry;
     class application_action;
+    class application_entry;
+    class application_entry_action;
 
     class API_PUBLIC desktop_entry {
     public:
@@ -66,6 +72,7 @@ namespace xdg::desktop_entry_spec {
         static desktop_entry from_store(std::filesystem::path store, std::filesystem::path relative_path);
 
         desktop_entry() = default;
+        desktop_entry(std::shared_ptr<detail::desktop_entry_data>);
 
         desktop_entry(const desktop_entry &);
         desktop_entry &operator=(const desktop_entry &);
@@ -85,28 +92,21 @@ namespace xdg::desktop_entry_spec {
 
         bool should_show() const noexcept;
 
-        // TODO: Remove
-        desktop_entry_storage &get_storage() noexcept;
-
     protected:
-        struct data;
-        desktop_entry(std::shared_ptr<data>);
-
-        std::shared_ptr<data> m_data;
+        std::shared_ptr<detail::desktop_entry_data> m_data;
     };
 
-    std::istream &operator>>(std::istream &is, desktop_entry &entry);
-
-    class API_PUBLIC application_action_data {
+    class API_PUBLIC application_action {
     public:
-        application_action_data() = default;
+        application_action() = default;
 
-        application_action_data(std::string name);
+        application_action(std::string name);
+        application_action(std::shared_ptr<detail::application_action_data> data);
 
-        application_action_data(const application_action_data &);
-        application_action_data &operator=(const application_action_data &);
-        application_action_data(application_action_data &&) noexcept;
-        application_action_data &operator=(application_action_data &&) noexcept;
+        application_action(const application_action &);
+        application_action &operator=(const application_action &);
+        application_action(application_action &&) noexcept;
+        application_action &operator=(application_action &&) noexcept;
 
         explicit operator bool() const noexcept;
 
@@ -115,12 +115,8 @@ namespace xdg::desktop_entry_spec {
         const types::localestring *get_icon() const noexcept;
         std::string_view get_exec() const noexcept;
 
-        // TODO: Remove
-        desktop_action_storage &get_storage() noexcept;
-
     private:
-        struct data;
-        std::shared_ptr<data> m_data;
+        std::shared_ptr<detail::application_action_data> m_data;
     };
 
     class API_PUBLIC application_entry : public desktop_entry, public detail::launch_impl<application_entry> {
@@ -139,8 +135,8 @@ namespace xdg::desktop_entry_spec {
         std::string_view get_exec() const noexcept;
         std::string_view get_path() const noexcept;
         bool get_terminal() const noexcept;
-        void add_actions(application_action_data new_action);
-        std::vector<application_action> get_actions() const;
+        void add_actions(application_action new_action);
+        std::vector<application_entry_action> get_actions() const;
         const types::strings *get_mime_types() const noexcept;
         const types::strings *get_categories() const noexcept;
         const types::strings *get_implements() const noexcept;
@@ -152,27 +148,20 @@ namespace xdg::desktop_entry_spec {
         std::string_view get_id() const noexcept;
         void set_id(std::string id) noexcept;
 
-        // TODO: Remove
-        application_entry_storage &get_storage() noexcept;
-
     private:
-        struct data;
-        data *get_ptr() const noexcept;
+        detail::application_entry_data *get_ptr() const noexcept;
     };
 
-    class API_PUBLIC application_action : public detail::launch_impl<application_action> {
+    class API_PUBLIC application_entry_action :
+            public application_action,
+            public detail::launch_impl<application_entry_action> {
     public:
-        application_action(application_entry entry, application_action_data data);
+        application_entry_action(application_entry entry, application_action data);
 
-        application_action(const application_action &);
-        application_action &operator=(const application_action &);
-        application_action(application_action &&) noexcept;
-        application_action &operator=(application_action &&) noexcept;
-
-        const std::string &get_id() const noexcept;
-        const types::localestring &get_name() const noexcept;
-        const types::localestring *get_icon() const noexcept;
-        std::string_view get_exec() const noexcept;
+        application_entry_action(const application_entry_action &);
+        application_entry_action &operator=(const application_entry_action &);
+        application_entry_action(application_entry_action &&) noexcept;
+        application_entry_action &operator=(application_entry_action &&) noexcept;
 
         [[deprecated("try_get_entry can no longer fail, thus it was renamed to get_entry")]]
         application_entry try_get_entry() const;
@@ -180,8 +169,9 @@ namespace xdg::desktop_entry_spec {
 
     private:
         application_entry m_entry;
-        application_action_data m_data;
     };
+
+    std::istream &operator>>(std::istream &is, desktop_entry &entry);
 
     API_PUBLIC std::vector<desktop_entry> get_all_desktop_entries();
     API_PUBLIC std::vector<application_entry> get_all_application_entries();

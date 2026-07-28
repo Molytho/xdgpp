@@ -11,7 +11,7 @@ sources = [
     'src/desktop-entry.cpp',
     'src/desktop-entry/types.cpp',
     'src/desktop-entry/well-known-keys.cpp',
-    'src/desktop-entry-parser.cpp'
+    'src/desktop-entry-parser.cpp',
 ]
 
 includes = [include_directories('include')]
@@ -53,10 +53,13 @@ meson.override_dependency('xdgpp', xdgpp_dep)
 # Make this library usable from the system's
 # package manager.
 install_headers(
-    'include/desktop-entry.h',
+    'include/desktop-entry/types.h',
+    'include/desktop-entry/well-known-keys.h',
     'include/basedir.h',
+    'include/desktop-entry.h',
     'include/helper.h',
     subdir: 'xdgpp',
+    preserve_path: true
 )
 
 pkg_mod = import('pkgconfig')
@@ -67,5 +70,5 @@ pkg_mod.generate(
     name: 'xdgpp',
     subdirs: 'xdgpp',
     url: 'https://github.com/molytho/xdgpp',
-    license: 'GPL-3.0-or-later'
+    license: 'GPL-3.0-or-later',
 )

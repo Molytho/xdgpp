@@ -1,7 +1,7 @@
 #ifndef LIB_XDGPP_BASEDIR_H
 #define LIB_XDGPP_BASEDIR_H
 
-#include <assert.h>
+#include <cassert>
 #include <filesystem>
 #include <stdexcept>
 #include <vector>

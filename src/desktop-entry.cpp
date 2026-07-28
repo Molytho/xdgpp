@@ -1,4 +1,5 @@
 #include "desktop-entry.h"
+#include "private/desktop-entry-private.h"
 
 #include <algorithm>
 #include <cassert>
@@ -13,7 +14,6 @@
 #include <boost/regex.hpp>
 
 #include "basedir.h"
-#include "private/desktop-entry-parser.h"
 
 using namespace std::string_view_literals;
 using namespace xdg::desktop_entry_spec;
@@ -42,7 +42,7 @@ namespace xdg::desktop_entry_spec {
         }
 
         template<>
-        API_PUBLIC std::string_view launch_impl<application_action>::get_path() const {
+        API_PUBLIC std::string_view launch_impl<application_entry_action>::get_path() const {
             return get_derived()->get_entry().get_path();
         }
 
@@ -52,7 +52,7 @@ namespace xdg::desktop_entry_spec {
         }
 
         template<>
-        API_PUBLIC bool launch_impl<application_action>::get_terminal() const {
+        API_PUBLIC bool launch_impl<application_entry_action>::get_terminal() const {
             return get_derived()->get_entry().get_terminal();
         }
 
@@ -61,13 +61,6 @@ namespace xdg::desktop_entry_spec {
             return get_derived()->get_terminal();
         }
     } // namespace detail
-
-    struct desktop_entry::data {
-        virtual ~data()                                     = default;
-        virtual types::entry_type get_type() const noexcept = 0;
-
-        desktop_entry_storage m_common_storage;
-    };
 
     desktop_entry desktop_entry::from_istream(std::istream &is) {
         desktop_entry ptr;
@@ -95,6 +88,9 @@ namespace xdg::desktop_entry_spec {
             return entry;
         }
     }
+
+    desktop_entry::desktop_entry(std::shared_ptr<detail::desktop_entry_data> data) :
+            m_data(std::move(data)) { }
 
     desktop_entry::desktop_entry(const desktop_entry &)            = default;
     desktop_entry &desktop_entry::operator=(const desktop_entry &) = default;
@@ -163,83 +159,39 @@ namespace xdg::desktop_entry_spec {
         return true;
     }
 
-    desktop_entry_storage &desktop_entry::get_storage() noexcept {
-        return m_data->m_common_storage;
-    }
+    application_action::application_action(std::string name) :
+            m_data(std::make_shared<detail::application_action_data>(name)) { }
 
-    desktop_entry::desktop_entry(std::shared_ptr<data> data) : m_data(std::move(data)) { }
+    application_action::application_action(std::shared_ptr<detail::application_action_data> data) :
+            m_data(std::move(data)) { }
 
-    std::istream &operator>>(std::istream &is, desktop_entry &entry) {
-        entry = detail::parse_desktop_entry(is);
-        return is;
-    }
+    application_action::application_action(const application_action &)                = default;
+    application_action &application_action::operator=(const application_action &)     = default;
+    application_action::application_action(application_action &&) noexcept            = default;
+    application_action &application_action::operator=(application_action &&) noexcept = default;
 
-    struct application_action_data::data {
-        const std::string &get_id() const noexcept { return m_id; }
-
-        const types::localestring &get_name() const noexcept {
-            return m_storage.get<well_known_keys::Name>();
-        }
-
-        const types::localestring *get_icon() const noexcept {
-            return m_storage.get<well_known_keys::Icon>().get_or_nullptr();
-        }
-
-        std::string_view get_exec() const noexcept {
-            auto &opt = m_storage.get<well_known_keys::Exec>();
-            return opt ? opt.get() : std::string_view();
-        }
-
-        desktop_action_storage &get_storage() noexcept { return m_storage; }
-
-        std::string m_id;
-        desktop_action_storage m_storage {};
-    };
-
-    application_action_data::application_action_data(std::string name) :
-            m_data(std::make_shared<data>(name)) { }
-
-    application_action_data::application_action_data(const application_action_data &) = default;
-    application_action_data &application_action_data::operator=(const application_action_data &) = default;
-    application_action_data::application_action_data(application_action_data &&) noexcept = default;
-    application_action_data &application_action_data::operator=(application_action_data &&) noexcept = default;
-
-    application_action_data::operator bool() const noexcept {
+    application_action::operator bool() const noexcept {
         return m_data != nullptr;
     }
 
-    const std::string &application_action_data::get_id() const noexcept {
+    const std::string &application_action::get_id() const noexcept {
         return m_data->get_id();
     }
 
-    const types::localestring &application_action_data::get_name() const noexcept {
+    const types::localestring &application_action::get_name() const noexcept {
         return m_data->get_name();
     }
 
-    const types::localestring *application_action_data::get_icon() const noexcept {
+    const types::localestring *application_action::get_icon() const noexcept {
         return m_data->get_icon();
     }
 
-    std::string_view application_action_data::get_exec() const noexcept {
+    std::string_view application_action::get_exec() const noexcept {
         return m_data->get_exec();
     }
 
-    desktop_action_storage &application_action_data::get_storage() noexcept {
-        return m_data->get_storage();
-    }
-
-    struct application_entry::data : desktop_entry::data {
-        std::string m_id;
-        application_entry_storage m_application_storage;
-        std::vector<application_action_data> m_actions;
-
-        types::entry_type get_type() const noexcept override {
-            return types::entry_type::Application;
-        }
-    };
-
     application_entry::application_entry() :
-            desktop_entry(std::make_shared<application_entry::data>()) { }
+            desktop_entry(std::make_shared<detail::application_entry_data>()) { }
 
     application_entry::application_entry(const application_entry &)            = default;
     application_entry &application_entry::operator=(const application_entry &) = default;
@@ -252,11 +204,11 @@ namespace xdg::desktop_entry_spec {
                     ? std::move(entry)
                     : throw std::logic_error("Tried to cast invalid instance to application_entry")
             ) {
-        assert(dynamic_cast<data *>(m_data.get()) != nullptr);
+        assert(dynamic_cast<detail::application_entry_data *>(m_data.get()) != nullptr);
     }
 
     bool application_entry::get_dbus_activatable() const noexcept {
-        return get_ptr()->m_application_storage.get<well_known_keys::DBusActivatable>().get_or_default(false);
+        return get_ptr()->get_dbus_activatable();
     }
 
     std::string_view application_entry::get_try_exec() const noexcept {
@@ -278,13 +230,13 @@ namespace xdg::desktop_entry_spec {
         return get_ptr()->m_application_storage.get<well_known_keys::Terminal>().get_or_default(false);
     }
 
-    void application_entry::add_actions(application_action_data new_action) {
-        get_ptr()->m_actions.emplace_back(std::move(new_action));
+    void application_entry::add_actions(application_action new_action) {
+        get_ptr()->add_actions(std::move(new_action));
     }
 
-    std::vector<application_action> application_entry::get_actions() const {
+    std::vector<application_entry_action> application_entry::get_actions() const {
         auto view = std::views::transform(get_ptr()->m_actions,
-            [&](application_action_data &data) { return application_action(*this, std::move(data)); });
+            [&](application_action data) { return application_entry_action(*this, std::move(data)); });
         return {begin(view), end(view)};
     }
 
@@ -329,45 +281,29 @@ namespace xdg::desktop_entry_spec {
         get_ptr()->m_id = std::move(id);
     }
 
-    application_entry_storage &application_entry::get_storage() noexcept {
-        return get_ptr()->m_application_storage;
+    detail::application_entry_data *application_entry::get_ptr() const noexcept {
+        return static_cast<detail::application_entry_data *>(m_data.get());
     }
 
-    application_entry::data *application_entry::get_ptr() const noexcept {
-        return static_cast<application_entry::data *>(m_data.get());
-    }
+    application_entry_action::application_entry_action(application_entry entry, application_action data) :
+            application_action(std::move(data)), m_entry(std::move(entry)) { }
 
-    application_action::application_action(application_entry entry, application_action_data data) :
-            m_entry(std::move(entry)), m_data(std::move(data)) { }
+    application_entry_action::application_entry_action(const application_entry_action &) = default;
+    application_entry_action &application_entry_action::operator=(const application_entry_action &) = default;
+    application_entry_action::application_entry_action(application_entry_action &&) noexcept = default;
+    application_entry_action &application_entry_action::operator=(application_entry_action &&) noexcept = default;
 
-    application_action::application_action(const application_action &)                = default;
-    application_action &application_action::operator=(const application_action &)     = default;
-    application_action::application_action(application_action &&) noexcept            = default;
-    application_action &application_action::operator=(application_action &&) noexcept = default;
-
-    const std::string &application_action::get_id() const noexcept {
-        return m_data.get_id();
-    }
-
-    const types::localestring &application_action::get_name() const noexcept {
-        return m_data.get_name();
-    }
-
-    const types::localestring *application_action::get_icon() const noexcept {
-        return m_data.get_icon();
-    }
-
-    std::string_view application_action::get_exec() const noexcept {
-        return m_data.get_exec();
-    }
-
-    [[deprecated("try_get_entry can no longer fail, thus it was renamed to get_entry")]]
-    application_entry application_action::try_get_entry() const {
+    application_entry application_entry_action::try_get_entry() const {
         return m_entry;
     }
 
-    application_entry application_action::get_entry() const {
+    application_entry application_entry_action::get_entry() const {
         return m_entry;
+    }
+
+    std::istream &operator>>(std::istream &is, desktop_entry &entry) {
+        entry = detail::parse_desktop_entry(is);
+        return is;
     }
 
     std::vector<desktop_entry> get_all_desktop_entries() {

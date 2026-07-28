@@ -1,6 +1,6 @@
 #include "desktop-entry.h"
 
-#include <desktop-entry/well-know-keys.h>
+#include <desktop-entry/well-known-keys.h>
 
 #include <iostream>
 

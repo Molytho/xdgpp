@@ -1,4 +1,4 @@
-#include "private/desktop-entry-parser.h"
+#include "private/desktop-entry-private.h"
 
 #include <algorithm>
 #include <array>
@@ -10,7 +10,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
 
-#include "desktop-entry/well-know-keys.h"
+#include "desktop-entry/well-known-keys.h"
+#include "private/desktop-entry-private.h"
 #include "private/string_helper.h"
 
 using namespace std::string_view_literals;
@@ -211,10 +212,11 @@ namespace {
 
     class parser_common : public parser_interface {
     protected:
-        desktop_entry m_entry;
+        std::shared_ptr<detail::desktop_entry_data> m_entry;
         bool m_is_main_section {true};
 
-        parser_common(desktop_entry entry) : m_entry(std::move(entry)) { }
+        parser_common(std::shared_ptr<detail::desktop_entry_data> entry) :
+                m_entry(std::move(entry)) { }
 
         void handle_section_change(std::string_view name) override {
             m_is_main_section = name == MainSectionName;
@@ -222,7 +224,7 @@ namespace {
         }
 
         void handle_main_section_well_know_key(well_known_keys key, key_value_match &key_value) {
-            if (!parse_well_know_key_into(key, key_value, m_entry.get_storage())) {
+            if (!parse_well_know_key_into(key, key_value, m_entry->m_common_storage)) {
                 throw std::runtime_error("Invalid well known key");
             }
         }
@@ -255,19 +257,22 @@ namespace {
     };
 
     class parser_application_entry : public parser_common {
-        application_entry m_entry;
         bool m_skip_section {false};
-        application_action_data m_current_action {};
+        std::shared_ptr<detail::application_action_data> m_current_action {};
         std::bitset<size_t(well_known_keys::Count)> m_present_well_known_keys;
 
         types::strings m_registered_actions {};
+
+        detail::application_entry_data *get_ptr() noexcept {
+            return static_cast<detail::application_entry_data *>(m_entry.get());
+        }
 
         void assert_required_keys() {
             bool valid = true;
             if (m_is_main_section || m_current_action) {
                 valid = m_present_well_known_keys.test(size_t(well_known_keys::Name))
                         && (m_present_well_known_keys.test(size_t(well_known_keys::Exec))
-                            || m_entry.get_dbus_activatable());
+                            || get_ptr()->get_dbus_activatable());
             }
 
             if (!valid) {
@@ -296,14 +301,14 @@ namespace {
                     return;
                 }
 
-                m_current_action = application_action_data {std::string(action_name)};
-                m_entry.add_actions(m_current_action);
+                m_current_action = std::make_shared<detail::application_action_data>(std::string(action_name));
+                get_ptr()->add_actions(m_current_action);
             }
         }
 
         void handle_action_section_well_known_key(well_known_keys key, key_value_match &key_value) {
             m_present_well_known_keys.set(size_t(key));
-            if (!parse_well_know_key_into(key, key_value, m_current_action.get_storage())) {
+            if (!parse_well_know_key_into(key, key_value, m_current_action->m_storage)) {
                 throw std::runtime_error(
                     "Encountered unexpected well known key in application action section"
                 );
@@ -326,7 +331,7 @@ namespace {
             m_present_well_known_keys.set(size_t(key));
             if (key == xdg::desktop_entry_spec::well_known_keys::Actions) {
                 key_value.parse_into(m_registered_actions);
-            } else if (!parse_well_know_key_into(key, key_value, m_entry.get_storage())) {
+            } else if (!parse_well_know_key_into(key, key_value, get_ptr()->m_application_storage)) {
                 parser_common::handle_main_section_well_know_key(key, key_value);
             }
         }
@@ -354,7 +359,7 @@ namespace {
 
     public:
         parser_application_entry() :
-                parser_common(application_entry()), m_entry(parser_common::m_entry) { }
+                parser_common(std::make_shared<detail::application_entry_data>()) { }
     };
 
     struct parser {

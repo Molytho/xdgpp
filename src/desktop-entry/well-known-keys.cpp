@@ -1,4 +1,4 @@
-#include "desktop-entry/well-know-keys.h"
+#include "desktop-entry/well-known-keys.h"
 
 #include <algorithm>
 #include <array>
