@@ -53,7 +53,6 @@ namespace xdg::basedir {
 
     API_PUBLIC data_dir_iterator begin(data_dir_iterator it);
     API_PUBLIC std::default_sentinel_t end(const data_dir_iterator &);
-
 } // namespace xdg::basedir
 
 #endif
