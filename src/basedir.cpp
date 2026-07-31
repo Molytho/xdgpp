@@ -112,32 +112,26 @@ namespace xdg::basedir {
     data_dir_iterator::data_dir_iterator(data_dir_iterator &&other) noexcept          = default;
     data_dir_iterator &data_dir_iterator::operator=(data_dir_iterator &&rhs) noexcept = default;
 
-    std::filesystem::path &data_dir_iterator::operator*() {
-        assert(!m_paths.empty());
+    const std::filesystem::path &data_dir_iterator::operator*() const {
+        if (m_paths.empty()) {
+            throw std::logic_error("Tried to dereference end iterator");
+        }
         return m_paths.back();
     }
 
-    std::filesystem::path *data_dir_iterator::operator->() {
-        assert(!m_paths.empty());
-        return std::addressof(m_paths.back());
+    void data_dir_iterator::operator++(int) {
+        if (m_paths.empty()) {
+            throw std::logic_error("Tried to increment end iterator");
+        }
+        m_paths.pop_back();
     }
 
     data_dir_iterator &data_dir_iterator::operator++() {
-        assert(!m_paths.empty());
-        m_paths.pop_back();
+        (*this)++;
         return *this;
     }
 
     bool data_dir_iterator::operator==(std::default_sentinel_t) const noexcept {
         return m_paths.empty();
     }
-
-    data_dir_iterator begin(data_dir_iterator it) {
-        return it;
-    }
-
-    std::default_sentinel_t end(const data_dir_iterator &) {
-        return {};
-    }
-
 } // namespace xdg::basedir
