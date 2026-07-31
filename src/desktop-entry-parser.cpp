@@ -49,12 +49,15 @@ namespace {
                 return {};
             }
 
-            if (!value.ends_with(delimiter)) {
-                // TODO: This might be valid as single value
-                throw std::runtime_error("Invalid string list");
+            std::string_view list;
+            if (value.ends_with(delimiter)) {
+                // TODO/FIXME/HACK: This is valid when we hava a single value, but then we have to proccess "\;" specifically...
+                // Pray for now that this does not happen
+                list = value.substr(0, value.size() - 1);
+            } else {
+                list = value;
             }
 
-            auto list = value.substr(0, value.size() - 1);
             return xdg::detail::utils::split_string(list, delimiter);
         }
 
