@@ -96,40 +96,15 @@ namespace xdg::basedir {
                    : throw mandatory_environment_variable_missing(XdgRuntimeDirVariable);
     }
 
-    data_dir_iterator::data_dir_iterator() : m_paths() {
-        auto system_dirs = xdg::basedir::get_data_dirs();
-        m_paths.reserve(system_dirs.size() + 1);
-        m_paths.insert(m_paths.cend(),
-            std::move_iterator(system_dirs.rbegin()),
-            std::move_iterator(system_dirs.rend()));
-        m_paths.emplace_back(get_data_home());
+    std::vector<std::filesystem::path> get_data_dirs_by_priority() {
+        auto data_dirs = get_data_dirs();
+        data_dirs.insert(data_dirs.cbegin(), get_data_home());
+        return data_dirs;
     }
 
-    data_dir_iterator::data_dir_iterator(const data_dir_iterator &)                   = default;
-    data_dir_iterator &data_dir_iterator::operator=(const data_dir_iterator &rhs)     = default;
-    data_dir_iterator::data_dir_iterator(data_dir_iterator &&other) noexcept          = default;
-    data_dir_iterator &data_dir_iterator::operator=(data_dir_iterator &&rhs) noexcept = default;
-
-    const std::filesystem::path &data_dir_iterator::operator*() const {
-        if (m_paths.empty()) {
-            throw std::logic_error("Tried to dereference end iterator");
-        }
-        return m_paths.back();
-    }
-
-    void data_dir_iterator::operator++(int) {
-        if (m_paths.empty()) {
-            throw std::logic_error("Tried to increment end iterator");
-        }
-        m_paths.pop_back();
-    }
-
-    data_dir_iterator &data_dir_iterator::operator++() {
-        (*this)++;
-        return *this;
-    }
-
-    bool data_dir_iterator::operator==(std::default_sentinel_t) const noexcept {
-        return m_paths.empty();
+    std::vector<std::filesystem::path> get_config_dirs_by_priority()  {
+        auto data_dirs = get_config_dirs();
+        data_dirs.insert(data_dirs.cbegin(), get_config_home());
+        return data_dirs;
     }
 } // namespace xdg::basedir

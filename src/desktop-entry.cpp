@@ -313,7 +313,7 @@ namespace xdg::desktop_entry_spec {
         std::unordered_set<std::string> files_read;
         std::vector<desktop_entry> result;
 
-        for (auto application_dir : xdg::basedir::data_dir_iterator()) {
+        for (auto &application_dir : basedir::get_data_dirs_by_priority()) {
             application_dir /= "applications";
             try {
                 for (const auto &file : recursive_directory_iterator(application_dir,
