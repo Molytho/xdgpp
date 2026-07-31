@@ -1,5 +1,6 @@
 #include "desktop-entry/types.h"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <iostream>
@@ -62,6 +63,17 @@ namespace {
 
     constexpr std::default_sentinel_t end(const alternative_locales_iterator &) {
         return {};
+    }
+
+    std::string calculate_id_from_path(const std::filesystem::path &path) {
+        std::string result = path.string();
+        std::ranges::replace(result, '/', '-');
+        return result;
+    }
+
+    std::filesystem::path calculate_path_from_id(std::string str) {
+        std::ranges::replace(str, '-', '/');
+        return str;
     }
 } // namespace
 
@@ -182,5 +194,29 @@ namespace xdg::desktop_entry_spec {
             }
             return is;
         }
+
+        application_id::application_id() = default;
+
+        application_id::application_id(std::string_view str) : application_id(std::string(str)) { }
+
+        application_id::application_id(std::string id) : m_id(std::move(id)) { }
+
+        application_id::application_id(const std::filesystem::path &relative_path) :
+                application_id(calculate_id_from_path(relative_path)) { }
+
+        application_id::application_id(const application_id &)                = default;
+        application_id &application_id::operator=(const application_id &)     = default;
+        application_id::application_id(application_id &&) noexcept            = default;
+        application_id &application_id::operator=(application_id &&) noexcept = default;
+
+        std::filesystem::path application_id::to_path() const {
+            return calculate_path_from_id(m_id);
+        }
+
+        application_id::operator std::string_view() const noexcept {
+            return m_id;
+        }
+
+        bool application_id::operator==(const application_id &) const noexcept = default;
     } // namespace types
 } // namespace xdg::desktop_entry_spec

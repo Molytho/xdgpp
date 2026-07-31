@@ -197,7 +197,7 @@ namespace xdg::desktop_entry_spec::detail {
             m_actions.emplace_back(std::move(new_action));
         }
 
-        std::string m_id;
+        types::application_id m_id;
         application_entry_storage m_application_storage;
         std::vector<application_action> m_actions;
     };

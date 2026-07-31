@@ -78,11 +78,7 @@ namespace xdg::desktop_entry_spec {
 
         if (entry.get_type() == types::entry_type::Application) {
             application_entry aentry {std::move(entry)};
-            aentry.set_id([&]() {
-                auto str = std::move(relative_path).string();
-                std::ranges::replace(str, '/', '-');
-                return str;
-            }());
+            aentry.set_id(types::application_id(relative_path));
             return aentry;
         } else {
             return entry;
@@ -276,11 +272,11 @@ namespace xdg::desktop_entry_spec {
         return get_ptr()->m_application_storage.get<well_known_keys::SingleMainWindow>().get_or_default(false);
     }
 
-    std::string_view application_entry::get_id() const noexcept {
+    const types::application_id &application_entry::get_id() const noexcept {
         return get_ptr()->m_id;
     }
 
-    void application_entry::set_id(std::string id) noexcept {
+    void application_entry::set_id(types::application_id id) noexcept {
         get_ptr()->m_id = std::move(id);
     }
 
@@ -356,4 +352,29 @@ namespace xdg::desktop_entry_spec {
         return {begin(view), end(view)};
     }
 
+    application_entry search_application_entry(types::application_id id) {
+        auto relative_path = id.to_path();
+        if (relative_path.extension() != ".desktop") {
+            return {};
+        }
+        for (auto &application_dir : basedir::get_data_dirs_by_priority()) {
+            application_dir /= "applications";
+
+            try {
+                auto entry = desktop_entry::from_store(application_dir, relative_path);
+                if (entry.get_type() != types::entry_type::Application) {
+                    return {};
+                }
+                return application_entry(entry);
+            } catch (const filesystem_error &ex) {
+                if (ex.code() != std::errc::no_such_file_or_directory) {
+                    throw;
+                }
+            } catch (const std::runtime_error &ex) {
+                // TODO: Specific exception
+                std::cerr << "Failed to parse desktop file: " << application_dir << '\n';
+            }
+        }
+        return {};
+    }
 } // namespace xdg::desktop_entry_spec

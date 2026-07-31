@@ -2,6 +2,7 @@
 #define DESKTOP_ENTRY_TYPES_H
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -97,6 +98,27 @@ namespace xdg::desktop_entry_spec::types {
     using iconstring    = localestring;
     using boolean       = bool;
     using numeric       = float;
+
+    class API_PUBLIC application_id {
+        std::string m_id;
+
+    public:
+        application_id();
+        application_id(std::string_view str);
+        application_id(std::string id);
+        application_id(const std::filesystem::path &relative_path);
+
+        application_id(const application_id &);
+        application_id &operator=(const application_id &);
+        application_id(application_id &&) noexcept;
+        application_id &operator=(application_id &&) noexcept;
+
+        std::filesystem::path to_path() const;
+
+        operator std::string_view() const noexcept;
+
+        bool operator==(const application_id &) const noexcept;
+    };
 } // namespace xdg::desktop_entry_spec::types
 
 #endif

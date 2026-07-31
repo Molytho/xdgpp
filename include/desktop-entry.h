@@ -145,8 +145,8 @@ namespace xdg::desktop_entry_spec {
         std::string_view get_startup_wm_class() const noexcept;
         bool get_prefers_non_default_gpu() const noexcept;
         bool get_single_main_window() const noexcept;
-        std::string_view get_id() const noexcept;
-        void set_id(std::string id) noexcept;
+        const types::application_id &get_id() const noexcept;
+        void set_id(types::application_id id) noexcept;
 
     private:
         detail::application_entry_data *get_ptr() const noexcept;
@@ -175,5 +175,6 @@ namespace xdg::desktop_entry_spec {
 
     API_PUBLIC std::vector<desktop_entry> get_all_desktop_entries();
     API_PUBLIC std::vector<application_entry> get_all_application_entries();
+    API_PUBLIC application_entry search_application_entry(types::application_id id);
 } // namespace xdg::desktop_entry_spec
 #endif
