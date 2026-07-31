@@ -1,11 +1,12 @@
+#include <basedir.h>
 #include <desktop-entry.h>
 #include <mime-apps.h>
-#include <basedir.h>
 
 #include <iostream>
 
 using namespace xdg::desktop_entry_spec;
 using namespace xdg::mime_apps;
+using namespace std::string_view_literals;
 
 void desktop_entry_stuff() {
     auto all = xdg::desktop_entry_spec::get_all_application_entries();
@@ -33,7 +34,9 @@ void desktop_entry_stuff() {
         std::cout << res << '\n';
     }
 
-    xdg::desktop_entry_spec::application_entry &entry = all.front();
+    xdg::desktop_entry_spec::types::application_id firefox_id {"firefox.desktop"sv};
+    auto entry = *xdg::desktop_entry_spec::search_application_entry(firefox_id);
+    assert(entry.get_id() == firefox_id);
 
     [[maybe_unused]] auto type = entry.get_type();
     [[maybe_unused]] auto name = entry.get_name();
@@ -72,6 +75,19 @@ void mime_type_stuff() {
         return;
     }
     auto [default_storage, changed_storage] = parse_mimeapps_list(file);
+
+    mime_type png_type       = "image/png";
+    auto default_app_for_png = xdg::mime_apps::get_default_app_for_mime_type(png_type);
+    if (default_app_for_png) {
+        std::cout
+            << "Default application for "
+            << png_type
+            << " is:\n"
+            << default_app_for_png->get_name().get()
+            << '\n';
+    } else {
+        std::cout << "No default application for " << png_type << '\\';
+    }
 
     return;
 }

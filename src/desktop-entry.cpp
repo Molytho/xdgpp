@@ -73,6 +73,9 @@ namespace xdg::desktop_entry_spec {
 
     desktop_entry desktop_entry::from_store(std::filesystem::path store, std::filesystem::path relative_path) {
         std::ifstream is {store / relative_path};
+        if (!is.is_open()) {
+            throw std::runtime_error("Failed to open file");
+        }
 
         auto entry = application_entry::from_istream(is);
 
@@ -352,7 +355,7 @@ namespace xdg::desktop_entry_spec {
         return {begin(view), end(view)};
     }
 
-    application_entry search_application_entry(types::application_id id) {
+    std::optional<application_entry> search_application_entry(types::application_id id) {
         auto relative_path = id.to_path();
         if (relative_path.extension() != ".desktop") {
             return {};
@@ -372,7 +375,7 @@ namespace xdg::desktop_entry_spec {
                 }
             } catch (const std::runtime_error &ex) {
                 // TODO: Specific exception
-                std::cerr << "Failed to parse desktop file: " << application_dir << '\n';
+                std::cerr << "Failed to parse desktop file: " << application_dir / relative_path << '\n';
             }
         }
         return {};
