@@ -41,6 +41,14 @@ namespace {
             return get_home_dir() / default_value;
         }
     }
+
+    std::vector<std::filesystem::path> split_multivar_variable(std::string str) {
+        auto view = xdg::detail::utils::string_spliterator {str, PathSeparator}
+                    | std::views::transform([](std::string_view str) {
+                          return check_for_absolute_path(str, XdgDataDirsVariable);
+                      });
+        return {std::move_iterator(view.begin()), std::move_iterator(view.end())};
+    }
 } // namespace
 
 namespace xdg::basedir {
@@ -75,21 +83,11 @@ namespace xdg::basedir {
     }
 
     std::vector<std::filesystem::path> get_data_dirs() {
-        auto strs = get_data_dirs_raw();
-        std::vector<std::filesystem::path> result;
-        for (const auto &str : xdg::detail::utils::string_spliterator {strs, PathSeparator}) {
-            result.emplace_back(check_for_absolute_path(str, XdgDataDirsVariable));
-        }
-        return result;
+        return split_multivar_variable(get_data_dirs_raw());
     }
 
     std::vector<std::filesystem::path> get_config_dirs() {
-        auto strs = get_config_dirs_raw();
-        std::vector<std::filesystem::path> result;
-        for (const auto &str : xdg::detail::utils::string_spliterator {strs, PathSeparator}) {
-            result.emplace_back(check_for_absolute_path(str, XdgConfigDirsVariable));
-        }
-        return result;
+        return split_multivar_variable(get_config_dirs_raw());
     }
 
     std::filesystem::path get_runtime_dir() {

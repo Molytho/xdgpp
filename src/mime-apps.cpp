@@ -139,18 +139,6 @@ namespace {
             }
         }
 
-        [[nodiscard]] static std::vector<std::string> parse_desktop_id_list_multiple(std::string_view str) {
-            constexpr char delimiter = ';';
-            str                      = str.substr(0, str.size() - 1);
-
-            std::vector<std::string> res {};
-            auto spliterator = xdg::detail::utils::string_spliterator(str, delimiter);
-            for (const auto &desktop_id : spliterator) {
-                res.emplace_back(desktop_id);
-            }
-            return res;
-        }
-
         [[nodiscard]] static std::vector<std::string> parse_desktop_id_list_single(std::string_view str) {
             constexpr char delimiter = ';';
 
@@ -162,6 +150,9 @@ namespace {
             size_t prev_pos    = 0;
             size_t current_pos = str.find(delimiter, prev_pos);
             while (current_pos != std::string_view::npos) {
+                // TODO/FIXME: The escape characters need to be removed
+                throw std::runtime_error("Unimplemented");
+
                 if (str.at(current_pos - 1) != '\\') {
                     throw std::runtime_error("Invalid desktop id list");
                 }
@@ -169,6 +160,7 @@ namespace {
                 prev_pos    = current_pos;
                 current_pos = str.find(delimiter, prev_pos);
             }
+
 
             return {std::string(str)};
         }
@@ -178,7 +170,7 @@ namespace {
             if (str.empty()) {
                 throw std::runtime_error("desktop id list can\'t be empty");
             } else if (str.ends_with(delimiter)) {
-                return parse_desktop_id_list_multiple(str);
+                return xdg::detail::utils::split_string(str.substr(0, str.size() - 1), delimiter);
             } else {
                 return parse_desktop_id_list_single(str);
             }

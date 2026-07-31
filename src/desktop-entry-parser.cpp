@@ -44,17 +44,18 @@ namespace {
         }
 
         std::vector<std::string> parse_as_vector() const {
+            constexpr char delimiter = ';';
             if (value.empty()) {
                 return {};
             }
 
-            std::vector<std::string> values;
-            for (const auto &str : xdg::detail::utils::string_spliterator(value, ';')) {
-                if (!str.empty()) {
-                    values.emplace_back(str);
-                }
+            if (!value.ends_with(delimiter)) {
+                // TODO: This might be valid as single value
+                throw std::runtime_error("Invalid string list");
             }
-            return values;
+
+            auto list = value.substr(0, value.size() - 1);
+            return xdg::detail::utils::split_string(list, delimiter);
         }
 
         void parse_into(types::entry_type &out) const {
