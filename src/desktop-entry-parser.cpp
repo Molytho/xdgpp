@@ -12,7 +12,6 @@
 
 #include "desktop-entry/well-known-keys.h"
 #include "private/desktop-entry-private.h"
-#include "private/string_helper.h"
 
 using namespace std::string_view_literals;
 
@@ -43,60 +42,23 @@ namespace {
             }
         }
 
-        std::vector<std::string> parse_as_vector() const {
-            constexpr char delimiter = ';';
-            if (value.empty()) {
-                return {};
+        template<class T>
+            requires requires() {
+                { types::parse<T>(std::declval<std::string_view>()) } -> std::same_as<T>;
             }
-
-            std::string_view list;
-            if (value.ends_with(delimiter)) {
-                // TODO/FIXME/HACK: This is valid when we hava a single value, but then we have to proccess "\;" specifically...
-                // Pray for now that this does not happen
-                list = value.substr(0, value.size() - 1);
-            } else {
-                list = value;
-            }
-
-            return xdg::detail::utils::split_string(list, delimiter);
-        }
-
-        void parse_into(types::entry_type &out) const {
+        void parse_into(T &out) const {
             assert_locale_empty();
-            auto parsed = types::entry_type_from_string(value);
-            if (!parsed) {
-                throw std::runtime_error("Invalid type");
-            }
-            out = *parsed;
+            out = types::parse<T>(value);
         }
 
-        void parse_into(types::boolean &out) const {
-            assert_locale_empty();
-            // TODO: Rework this
-            if (value == "true") {
-                out = true;
-            } else if (value == "false") {
-                out = false;
-            } else {
-                throw std::runtime_error("Invalid bool value");
-            }
+        void parse_into(types::localestring &out) const {
+            auto str = types::parse<types::string>(value, true);
+            out.add(locale, std::move(str));
         }
-
-        void parse_into(types::string &out) const {
-            assert_locale_empty();
-            out = std::string(value);
-        }
-
-        void parse_into(types::strings &out) const {
-            assert_locale_empty();
-            out = parse_as_vector();
-        }
-
-        void parse_into(types::localestring &out) const { out.add(locale, std::string(value)); }
 
         void parse_into(types::localestrings &out) const {
-            auto parsed = parse_as_vector();
-            out.add(locale, std::move(parsed));
+            auto strs = types::parse<types::strings>(value, true);
+            out.add(locale, std::move(strs));
         }
 
         std::optional<well_known_keys> parse_as_well_known_key() const noexcept {

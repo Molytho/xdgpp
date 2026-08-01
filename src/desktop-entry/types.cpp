@@ -3,8 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <format>
 #include <iostream>
 #include <string_view>
+
+#include <boost/regex.hpp>
+
+#include "private/string_helper.h"
 
 using namespace std::string_view_literals;
 using namespace xdg::desktop_entry_spec;
@@ -74,6 +79,28 @@ namespace {
     std::filesystem::path calculate_path_from_id(std::string str) {
         std::ranges::replace(str, '-', '/');
         return str;
+    }
+
+    [[noreturn]] void throw_parsing_error(std::string_view type, std::string_view value) {
+        static constexpr std::string_view format {"Could not parse \"{}\" as \"{}\""};
+        throw types::parsing_error(std::format(format, value, type));
+    }
+
+    template<class T>
+    T throw_parsing_error_if_nullopt(std::optional<T> &opt, std::string_view type, std::string_view value) {
+        if (!opt) {
+            throw_parsing_error(type, value);
+        }
+        return *std::move(opt);
+    }
+
+    auto split_semicolon_delimited_list(std::string_view str) noexcept {
+        static const boost::regex unescaped_semicolon_re {"(?<!\\\\)(?:\\\\\\\\)*(;)"};
+        return xdg::detail::utils::re_string_spliterator(str, unescaped_semicolon_re);
+    }
+
+    bool is_ascii_control(char c) {
+        return c < ' ' || c > '~';
     }
 } // namespace
 
@@ -218,5 +245,90 @@ namespace xdg::desktop_entry_spec {
         }
 
         bool application_id::operator==(const application_id &) const noexcept = default;
+
+        namespace detail {
+            entry_type parse(parse_tag<entry_type>, std::string_view str) {
+                auto parsed = types::entry_type_from_string(str);
+                return throw_parsing_error_if_nullopt(parsed, "entry_type", str);
+            }
+
+            string parse(parse_tag<string>, std::string_view str, bool allow_utf8, bool handle_semicolon) {
+                if (!allow_utf8 && std::ranges::any_of(str, is_ascii_control)) {
+                    throw_parsing_error("string", str);
+                }
+
+                std::string result {str};
+
+                size_t prev_pos = 0;
+                size_t pos      = result.find('\\', prev_pos);
+                if (pos == std::string::npos) {
+                    return result;
+                }
+
+                auto do_escape = [&](char c) {
+                    result.at(pos)     = c;
+                    result.at(pos + 1) = '\0';
+                };
+                while (pos != std::string::npos && pos + 1 < result.size()) {
+                    switch (result.at(pos + 1)) {
+                    case 's':
+                        do_escape(' ');
+                        break;
+                    case 'n':
+                        do_escape('\n');
+                        break;
+                    case 't':
+                        do_escape('\t');
+                        break;
+                    case 'r':
+                        do_escape('\r');
+                        break;
+                    case '\\':
+                        do_escape('\\');
+                        break;
+                    case ';':
+                        if (handle_semicolon) {
+                            do_escape(';');
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+
+                    prev_pos = pos + 1;
+                    pos      = str.find('\\', prev_pos);
+                }
+                std::erase(result, '\0');
+                return result;
+            }
+
+            string parse(parse_tag<string> t, std::string_view str, bool allow_utf8) {
+                return parse(t, str, allow_utf8, false);
+            }
+
+            strings parse(parse_tag<strings>, std::string_view str, bool allow_utf8) {
+                auto view = split_semicolon_delimited_list(str) | std::views::transform([allow_utf8](std::string_view str) {
+                    return parse(parse_tag<string> {}, str, allow_utf8, true);
+                });
+                return {std::move_iterator(view.begin()), std::move_iterator(view.end())};
+            }
+
+            boolean parse(parse_tag<boolean>, std::string_view str) {
+                if (str == "true") {
+                    return true;
+                } else if (str == "false") {
+                    return false;
+                } else {
+                    throw_parsing_error("boolean", str);
+                }
+            }
+
+            std::vector<application_id> parse(parse_tag<std::vector<application_id>>, std::string_view str) {
+                auto view = split_semicolon_delimited_list(str) | std::views::transform([](std::string_view str) {
+                    return application_id(parse(parse_tag<string> {}, str, true, true));
+                });
+                return {std::move_iterator(view.begin()), std::move_iterator(view.end())};
+            }
+        } // namespace detail
     } // namespace types
 } // namespace xdg::desktop_entry_spec

@@ -90,14 +90,12 @@ namespace xdg::desktop_entry_spec::types {
     API_PUBLIC std::ostream &operator<<(std::ostream &os, entry_type val);
     API_PUBLIC std::istream &operator>>(std::istream &is, entry_type &out);
 
-    // TODO: This should only allow ASCII chars
     using string        = std::string;
     using strings       = std::vector<string>;
     using localestring  = detail::localized_data<std::string>;
     using localestrings = detail::localized_data<std::vector<std::string>>;
     using iconstring    = localestring;
     using boolean       = bool;
-    using numeric       = float;
 
     class API_PUBLIC application_id {
         std::string m_id;
@@ -119,6 +117,26 @@ namespace xdg::desktop_entry_spec::types {
 
         bool operator==(const application_id &) const noexcept;
     };
+
+    namespace API_PUBLIC detail {
+        template<class T>
+        struct parse_tag { };
+
+        entry_type parse(parse_tag<entry_type>, std::string_view str);
+        string parse(parse_tag<string>, std::string_view str, bool allow_utf8 = false);
+        strings parse(parse_tag<strings>, std::string_view str, bool allow_utf8 = false);
+        boolean parse(parse_tag<boolean>, std::string_view str);
+        std::vector<application_id> parse(parse_tag<std::vector<application_id>>, std::string_view str);
+    } // namespace detail
+
+    struct parsing_error : std::runtime_error {
+        using std::runtime_error::runtime_error;
+    };
+
+    template<class T, class... Args>
+    auto parse(std::string_view str, Args &&...args) {
+        return detail::parse(detail::parse_tag<T> {}, str, std::forward<Args>(args)...);
+    }
 } // namespace xdg::desktop_entry_spec::types
 
 #endif

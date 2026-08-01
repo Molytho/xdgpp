@@ -6,6 +6,8 @@
 #include <string_view>
 #include <vector>
 
+#include <boost/regex.hpp>
+
 namespace xdg::detail::utils {
     class string_spliterator : public std::ranges::view_interface<string_spliterator> {
         char m_delimiter;
@@ -72,6 +74,75 @@ namespace xdg::detail::utils {
         auto spliterator = string_spliterator(view, delimiter);
         return {spliterator.begin(), spliterator.end()};
     }
+
+    class re_string_spliterator : public std::ranges::view_interface<re_string_spliterator> {
+        std::string_view::const_iterator m_str_begin;
+        std::string_view::const_iterator m_str_end;
+        boost::regex_iterator<std::string_view::const_iterator> m_it;
+
+        bool is_end() const noexcept { return m_str_begin == m_str_end; }
+
+        bool has_it_ended() const noexcept {
+            return m_it == boost::regex_iterator<std::string_view::const_iterator> {};
+        }
+
+    public:
+        using value_type      = std::string_view;
+        using difference_type = std::ptrdiff_t;
+
+        re_string_spliterator() : m_str_begin(), m_str_end(), m_it() { }
+
+        re_string_spliterator(std::string_view str, const boost::regex &re) :
+                m_str_begin(str.begin()), m_str_end(str.end()), m_it(str.begin(), str.end(), re) { }
+
+        re_string_spliterator(const re_string_spliterator &)            = default;
+        re_string_spliterator &operator=(const re_string_spliterator &) = default;
+
+        std::string_view operator*() const noexcept {
+            if (!has_it_ended()) {
+                return {m_str_begin, (*m_it)[1].first};
+            } else {
+                return {m_str_begin, m_str_end};
+            }
+        }
+
+        re_string_spliterator &operator++() {
+            if (is_end()) {
+                throw std::logic_error("Tried to increment iterator while it is at the end");
+            }
+
+            if (!has_it_ended()) {
+                m_str_begin = (*m_it)[1].second;
+                ++m_it;
+            } else {
+                m_str_begin = m_str_end;
+            }
+            return *this;
+        }
+
+        re_string_spliterator operator++(int) {
+            re_string_spliterator cur = *this;
+            ++*this;
+            return cur;
+        }
+
+        const re_string_spliterator &begin() const noexcept { return *this; }
+
+        re_string_spliterator &begin() noexcept { return *this; }
+
+        static re_string_spliterator end() noexcept { return {}; }
+
+        bool operator==(const re_string_spliterator &other) const noexcept {
+            return (this == std::addressof(other))
+                   || (is_end() && other.is_end())
+                   || (m_str_begin == other.m_str_begin
+                       && m_str_end == other.m_str_end
+                       && m_it == other.m_it);
+        }
+    };
+
+    static_assert(std::forward_iterator<re_string_spliterator>);
+    static_assert(std::ranges::view<re_string_spliterator>);
 } // namespace xdg::detail::utils
 
 #endif
