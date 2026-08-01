@@ -173,6 +173,8 @@ namespace xdg::desktop_entry_spec {
 
     std::istream &operator>>(std::istream &is, desktop_entry &entry);
 
+    using parsing_error = types::parsing_error;
+
     API_PUBLIC std::vector<desktop_entry> get_all_desktop_entries();
     API_PUBLIC std::vector<application_entry> get_all_application_entries();
 

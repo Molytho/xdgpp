@@ -38,7 +38,7 @@ namespace {
 
         void assert_locale_empty() const {
             if (!locale.empty()) {
-                throw std::runtime_error("value cannot be localized");
+                throw parsing_error("value cannot be localized");
             }
         }
 
@@ -104,7 +104,7 @@ namespace {
         [[nodiscard]] key_value_match parse_as_key_value() const {
             boost::match_results<std::string::const_iterator> match;
             if (!boost::regex_match(m_str.begin(), m_str.end(), match, ParseKeyValueRe)) {
-                throw std::runtime_error("Line did not match");
+                throw parsing_error("Line did not match");
             }
             auto &key_match    = match["key"];
             auto &value_match  = match["value"];
@@ -192,7 +192,7 @@ namespace {
 
         void handle_main_section_well_know_key(well_known_keys key, key_value_match &key_value) {
             if (!parse_well_know_key_into(key, key_value, m_entry->m_common_storage)) {
-                throw std::runtime_error("Invalid well known key");
+                throw parsing_error("Invalid well known key");
             }
         }
 
@@ -243,7 +243,7 @@ namespace {
             }
 
             if (!valid) {
-                throw std::runtime_error("Required key missing");
+                throw parsing_error("Required key missing");
             }
         }
 
@@ -276,7 +276,7 @@ namespace {
         void handle_action_section_well_known_key(well_known_keys key, key_value_match &key_value) {
             m_present_well_known_keys.set(size_t(key));
             if (!parse_well_know_key_into(key, key_value, m_current_action->m_storage)) {
-                throw std::runtime_error(
+                throw parsing_error(
                     "Encountered unexpected well known key in application action section"
                 );
             }
@@ -345,11 +345,11 @@ namespace {
 
         input_line assert_getline() {
             if (is.eof()) {
-                throw std::runtime_error("Unexpected EOF");
+                throw parsing_error("Unexpected EOF");
             }
             auto line = get_non_blank_line();
             if (!line) {
-                throw std::runtime_error("Unexpected EOF");
+                throw parsing_error("Unexpected EOF");
             }
             return line;
         }
@@ -357,7 +357,7 @@ namespace {
         void assert_main_section() {
             auto line = assert_getline();
             if (line.parse_as_group_header() != MainSectionName) {
-                throw std::runtime_error("Expected main section");
+                throw parsing_error("Expected main section");
             }
         }
 
@@ -365,7 +365,7 @@ namespace {
             input_line line = assert_getline();
             while (!line.is_type_line()) {
                 if (!line.parse_as_group_header().empty()) {
-                    throw std::runtime_error("desktop entry has no type");
+                    throw parsing_error("desktop entry has no type");
                 }
 
                 line_buffer.emplace_back(std::move(line));

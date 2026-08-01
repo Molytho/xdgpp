@@ -20,6 +20,17 @@ using namespace xdg::desktop_entry_spec;
 using namespace std::filesystem;
 
 namespace xdg::desktop_entry_spec {
+    template<class F>
+    auto on_exit(F &&f) {
+        struct impl {
+            F f;
+
+            ~impl() { std::move(f)(); }
+        };
+
+        return impl {std::forward<F>(f)};
+    }
+
     namespace detail {
         std::string make_command_line(std::string_view exec, std::string_view name,
             [[maybe_unused]] std::vector<std::string> launch_args, [[maybe_unused]] bool are_uri) {
@@ -63,15 +74,21 @@ namespace xdg::desktop_entry_spec {
     } // namespace detail
 
     desktop_entry desktop_entry::from_istream(std::istream &is) {
-        desktop_entry ptr;
-        is >> ptr;
-        if (is.fail()) {
-            throw std::runtime_error("Parsing desktop_entry failed");
-        }
-        return ptr;
+        on_exit([cur_state = is.exceptions(), &is]() { is.exceptions(cur_state); });
+        auto entry = detail::parse_desktop_entry(is);
+        // Throw if input failed
+        is.exceptions(std::ios_base::failbit);
+        return entry;
     }
 
     desktop_entry desktop_entry::from_store(std::filesystem::path store, std::filesystem::path relative_path) {
+        auto path = store / relative_path;
+        if (!exists(path)) {
+            throw std::filesystem::filesystem_error("File does not exist",
+                path,
+                std::make_error_code(std::errc::no_such_file_or_directory));
+        }
+
         std::ifstream is {store / relative_path};
         if (!is.is_open()) {
             throw std::runtime_error("Failed to open file");
@@ -309,7 +326,7 @@ namespace xdg::desktop_entry_spec {
     }
 
     std::vector<desktop_entry> get_all_desktop_entries() {
-        std::unordered_set<std::string> files_read;
+        std::unordered_set<std::filesystem::path> files_read;
         std::vector<desktop_entry> result;
 
         for (auto &application_dir : basedir::get_data_dirs_by_priority()) {
@@ -322,7 +339,7 @@ namespace xdg::desktop_entry_spec {
                     }
 
                     auto relative_path = file.path().lexically_relative(application_dir);
-                    if (auto [it, success] = files_read.emplace(relative_path.string()); !success) {
+                    if (auto [it, success] = files_read.emplace(relative_path); !success) {
                         // Already read from directory with higher priority
                         continue;
                     }
@@ -330,7 +347,6 @@ namespace xdg::desktop_entry_spec {
                     try {
                         result.emplace_back(desktop_entry::from_store(application_dir, relative_path));
                     } catch (const std::runtime_error &ex) {
-                        // TODO: Specific exception
                         std::cerr << "Failed to parse desktop file: " << file << '\n';
                         continue;
                     }
@@ -366,7 +382,7 @@ namespace xdg::desktop_entry_spec {
             try {
                 auto entry = desktop_entry::from_store(application_dir, relative_path);
                 if (entry.get_type() != types::entry_type::Application) {
-                    return {};
+                    return std::nullopt;
                 }
                 return std::optional<search_result> {
                     std::in_place,
@@ -379,8 +395,8 @@ namespace xdg::desktop_entry_spec {
                     throw;
                 }
             } catch (const std::runtime_error &ex) {
-                // TODO: Specific exception
                 std::cerr << "Failed to parse desktop file: " << application_dir / relative_path << '\n';
+                return std::nullopt;
             }
         }
         return std::nullopt;
