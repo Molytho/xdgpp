@@ -357,13 +357,12 @@ namespace xdg::mime_apps {
     std::optional<desktop_entry_spec::application_entry>
         get_default_app_for_mime_type(const mime_type &mime_type, mimeapps_list_cache &cache) {
         for (const auto &path : cache.get_mimeapps_list_locations()) {
-            auto &data = cache.read(path);
-            if (!data.first) {
-                // No default associations
+            auto &[default_apps, ignore] = cache.read(path);
+            if (!default_apps) {
                 continue;
             }
 
-            const auto *associations = data.first->get_associations(mime_type);
+            const auto *associations = default_apps->get_associations(mime_type);
             if (!associations) {
                 continue;
             }

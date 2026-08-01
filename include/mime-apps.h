@@ -116,9 +116,10 @@ namespace xdg::mime_apps {
         }
     };
 
-    // TODO: Own type
-    using mimeapps_list_data
-        = std::pair<std::unique_ptr<default_applications_storage>, std::unique_ptr<changed_mime_types_storage>>;
+    struct mimeapps_list_data {
+        std::unique_ptr<default_applications_storage> default_apps;
+        std::unique_ptr<changed_mime_types_storage> changed_mime_types;
+    };
 
     class API_PUBLIC mimeapps_list_cache {
         std::map<std::filesystem::path, mimeapps_list_data> m_cache;
