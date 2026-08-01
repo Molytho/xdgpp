@@ -100,12 +100,12 @@ namespace xdg::mime_apps {
             return set_associations_in(m_removed_associations, std::move(type), std::move(desktop_ids));
         }
 
-        void clear_association(mime_type type, application_id desktop_id) {
+        void clear_association(const mime_type &type, const application_id &desktop_id) {
             remove_association_from(m_added_associations, type, desktop_id);
             remove_association_from(m_removed_associations, type, desktop_id);
         }
 
-        association_type get_association(mime_type type, application_id desktop_id) const {
+        association_type get_association(const mime_type &type, const application_id &desktop_id) const {
             if (contains_association(m_added_associations, type, desktop_id)) {
                 return association_type::Added;
             } else if (contains_association(m_removed_associations, type, desktop_id)) {

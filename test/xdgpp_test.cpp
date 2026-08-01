@@ -35,7 +35,9 @@ void desktop_entry_stuff() {
     }
 
     xdg::desktop_entry_spec::types::application_id firefox_id {"firefox.desktop"sv};
-    auto entry = *xdg::desktop_entry_spec::search_application_entry(firefox_id);
+    auto result = xdg::desktop_entry_spec::search_application_entry(firefox_id);
+    assert(result);
+    auto &entry = result->entry;
     assert(entry.get_id() == firefox_id);
 
     [[maybe_unused]] auto type = entry.get_type();

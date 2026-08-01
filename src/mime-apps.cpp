@@ -283,13 +283,31 @@ namespace {
     }
 
     bool check_mime_type_allowed_for(const mime_type &mime_type,
-        const xdg::desktop_entry_spec::application_entry &entry, mimeapps_list_cache &cache) {
-        if (auto mime_types = entry.get_mime_types();
+        const xdg::desktop_entry_spec::search_result &result, mimeapps_list_cache &cache) {
+        using association_type = xdg::mime_apps::changed_mime_types_storage::association_type;
+
+        for (const auto &mimeapp_list : cache.get_mimeapps_list_locations_with_associations()) {
+            auto &[default_apps, added_removed_types] = cache.read(mimeapp_list);
+
+            if (added_removed_types) {
+                auto type = added_removed_types->get_association(mime_type, result.entry.get_id());
+                if (type == association_type::Added) {
+                    return true;
+                } else if (type == association_type::Removed) {
+                    return false;
+                }
+            }
+
+            if (mimeapp_list == result.store) {
+                break;
+            }
+        }
+
+        if (auto mime_types = result.entry.get_mime_types();
             mime_types && std::ranges::find(*mime_types, mime_type) != mime_types->end()) {
             return true;
         }
-        // TODO
-        (void)cache;
+
         return false;
     }
 } // namespace
@@ -313,6 +331,7 @@ namespace xdg::mime_apps {
         }
 
         auto [new_it, success] = m_cache.emplace(path, std::move(data));
+        assert(success);
         return new_it->second;
     }
 
@@ -350,10 +369,9 @@ namespace xdg::mime_apps {
             }
 
             for (const auto &default_app : *associations) {
-                auto opt_application_entry = desktop_entry_spec::search_application_entry(default_app);
-                if (opt_application_entry
-                    && check_mime_type_allowed_for(mime_type, *opt_application_entry, cache)) {
-                    return *std::move(opt_application_entry);
+                auto search_result = desktop_entry_spec::search_application_entry(default_app);
+                if (search_result && check_mime_type_allowed_for(mime_type, *search_result, cache)) {
+                    return std::move(search_result)->entry;
                 }
             }
         }

@@ -355,10 +355,10 @@ namespace xdg::desktop_entry_spec {
         return {begin(view), end(view)};
     }
 
-    std::optional<application_entry> search_application_entry(types::application_id id) {
+    std::optional<search_result> search_application_entry(types::application_id id) {
         auto relative_path = id.to_path();
         if (relative_path.extension() != ".desktop") {
-            return {};
+            return std::nullopt;
         }
         for (auto &application_dir : basedir::get_data_dirs_by_priority()) {
             application_dir /= "applications";
@@ -368,7 +368,12 @@ namespace xdg::desktop_entry_spec {
                 if (entry.get_type() != types::entry_type::Application) {
                     return {};
                 }
-                return application_entry(entry);
+                return std::optional<search_result> {
+                    std::in_place,
+                    std::move(application_dir),
+                    std::move(relative_path),
+                    application_entry(std::move(entry))
+                };
             } catch (const filesystem_error &ex) {
                 if (ex.code() != std::errc::no_such_file_or_directory) {
                     throw;
@@ -378,6 +383,6 @@ namespace xdg::desktop_entry_spec {
                 std::cerr << "Failed to parse desktop file: " << application_dir / relative_path << '\n';
             }
         }
-        return {};
+        return std::nullopt;
     }
 } // namespace xdg::desktop_entry_spec

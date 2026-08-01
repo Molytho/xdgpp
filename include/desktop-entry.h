@@ -175,6 +175,13 @@ namespace xdg::desktop_entry_spec {
 
     API_PUBLIC std::vector<desktop_entry> get_all_desktop_entries();
     API_PUBLIC std::vector<application_entry> get_all_application_entries();
-    API_PUBLIC std::optional<application_entry> search_application_entry(types::application_id id);
+
+    struct search_result {
+        std::filesystem::path store;
+        std::filesystem::path relative_path;
+        application_entry entry;
+    };
+
+    API_PUBLIC std::optional<search_result> search_application_entry(types::application_id id);
 } // namespace xdg::desktop_entry_spec
 #endif
