@@ -259,8 +259,7 @@ namespace xdg::desktop_entry_spec {
 
                 std::string result {str};
 
-                size_t prev_pos = 0;
-                size_t pos      = result.find('\\', prev_pos);
+                size_t pos      = result.find('\\');
                 if (pos == std::string::npos) {
                     return result;
                 }
@@ -295,8 +294,7 @@ namespace xdg::desktop_entry_spec {
                         break;
                     }
 
-                    prev_pos = pos + 1;
-                    pos      = str.find('\\', prev_pos);
+                    pos      = str.find('\\', pos + 1);
                 }
                 std::erase(result, '\0');
                 return result;
