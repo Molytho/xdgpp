@@ -19,75 +19,16 @@ namespace {
         boost::regex_constants::flag_type_::optimize
     };
 
-    class file_parser {
+    class file_parser_base {
+    protected:
         struct section_handler {
-            section_handler(file_parser &parser) : m_parser(parser) { }
-
             virtual ~section_handler() = default;
 
             virtual void set_association(mime_type, std::vector<application_id>) { }
-
-        protected:
-            file_parser &m_parser;
-        };
-
-        struct add_associations_handler : section_handler {
-            add_associations_handler(file_parser &parser) : section_handler(parser) {
-                if (!m_parser.m_changed_mime_type_storage) {
-                    m_parser.m_changed_mime_type_storage = std::make_unique<changed_mime_types_storage>();
-                }
-            }
-
-            void set_association(mime_type type, std::vector<application_id> value) final {
-                bool is_new = m_parser.m_changed_mime_type_storage->set_associations(std::move(type),
-                    std::move(value));
-                if (!is_new) {
-                    std::cerr
-                        << "mimetype appeard multiple times in \"Added Associations\" section\n";
-                }
-            }
-        };
-
-        struct removed_associations_handler : section_handler {
-            removed_associations_handler(file_parser &parser) : section_handler(parser) {
-                if (!m_parser.m_changed_mime_type_storage) {
-                    m_parser.m_changed_mime_type_storage = std::make_unique<changed_mime_types_storage>();
-                }
-            }
-
-            void set_association(mime_type type, std::vector<application_id> value) final {
-                bool is_new = m_parser.m_changed_mime_type_storage->remove_associations(std::move(type),
-                    std::move(value));
-                if (!is_new) {
-                    std::cerr
-                        << "mimetype appeard multiple times in \"Removed Associations\" section\n";
-                }
-            }
-        };
-
-        struct default_applications_handler : section_handler {
-            default_applications_handler(file_parser &parser) : section_handler(parser) {
-                if (!m_parser.m_applications_storage) {
-                    m_parser.m_applications_storage = std::make_unique<default_applications_storage>();
-                }
-            }
-
-            void set_association(mime_type type, std::vector<application_id> value) final {
-                bool is_new = m_parser.m_applications_storage->set_associations(std::move(type),
-                    std::move(value));
-                if (!is_new) {
-                    std::cerr
-                        << "mimetype appeard multiple times in \"Default Applications\" section\n";
-                }
-            }
         };
 
         std::istream &m_is;
         std::unique_ptr<section_handler> m_current_section_handler;
-        bool m_mime_type_change_allowed;
-
-        std::unique_ptr<default_applications_storage> m_applications_storage {};
-        std::unique_ptr<changed_mime_types_storage> m_changed_mime_type_storage {};
 
         static bool is_comment_line(const std::string &str) {
             return str.empty() || boost::regex_search(str.begin(), str.end(), IsCommentRe);
@@ -122,24 +63,7 @@ namespace {
             };
         }
 
-        void update_section(std::string_view name) {
-            if (name == "Default Applications") {
-                m_current_section_handler = std::make_unique<default_applications_handler>(*this);
-            } else if (name == "Added Associations") {
-                m_current_section_handler
-                    = m_mime_type_change_allowed
-                          ? std::make_unique<add_associations_handler>(*this)
-                          : throw std::runtime_error("Added Assocations section not allowed");
-            } else if (name == "Removed Associations") {
-                m_current_section_handler
-                    = m_mime_type_change_allowed
-                          ? std::make_unique<removed_associations_handler>(*this)
-                          : throw std::runtime_error("Removed Assocations section not allowed");
-
-            } else {
-                m_current_section_handler = std::make_unique<section_handler>(*this);
-            }
-        }
+        virtual void update_section(std::string_view name) = 0;
 
         [[nodiscard]] static std::vector<application_id> parse_desktop_id_list_single(std::string_view str) {
             constexpr char delimiter = ';';
@@ -192,8 +116,7 @@ namespace {
         }
 
     public:
-        file_parser(std::istream &is, bool mime_type_change_allowed) :
-                m_is(is), m_mime_type_change_allowed(mime_type_change_allowed) { }
+        file_parser_base(std::istream &is) : m_is(is) { }
 
         void parse() {
             std::string line = get_non_blank_line();
@@ -213,6 +136,96 @@ namespace {
                 process_line(line);
             }
         }
+    };
+
+    class mimeapps_list_parser : public file_parser_base {
+        struct add_associations_handler : section_handler {
+            add_associations_handler(mimeapps_list_parser &parser) : m_parser(parser) {
+                if (!m_parser.m_changed_mime_type_storage) {
+                    m_parser.m_changed_mime_type_storage = std::make_unique<changed_mime_types_storage>();
+                }
+            }
+
+            void set_association(mime_type type, std::vector<application_id> value) final {
+                bool is_new = m_parser.m_changed_mime_type_storage->set_associations(std::move(type),
+                    std::move(value));
+                if (!is_new) {
+                    std::cerr
+                        << "mimetype appeard multiple times in \"Added Associations\" section\n";
+                }
+            }
+
+        private:
+            mimeapps_list_parser &m_parser;
+        };
+
+        struct removed_associations_handler : section_handler {
+            removed_associations_handler(mimeapps_list_parser &parser) : m_parser(parser) {
+                if (!m_parser.m_changed_mime_type_storage) {
+                    m_parser.m_changed_mime_type_storage = std::make_unique<changed_mime_types_storage>();
+                }
+            }
+
+            void set_association(mime_type type, std::vector<application_id> value) final {
+                bool is_new = m_parser.m_changed_mime_type_storage->remove_associations(std::move(type),
+                    std::move(value));
+                if (!is_new) {
+                    std::cerr
+                        << "mimetype appeard multiple times in \"Removed Associations\" section\n";
+                }
+            }
+
+        private:
+            mimeapps_list_parser &m_parser;
+        };
+
+        struct default_applications_handler : section_handler {
+            default_applications_handler(mimeapps_list_parser &parser) : m_parser(parser) {
+                if (!m_parser.m_applications_storage) {
+                    m_parser.m_applications_storage = std::make_unique<default_applications_storage>();
+                }
+            }
+
+            void set_association(mime_type type, std::vector<application_id> value) final {
+                bool is_new = m_parser.m_applications_storage->set_associations(std::move(type),
+                    std::move(value));
+                if (!is_new) {
+                    std::cerr
+                        << "mimetype appeard multiple times in \"Default Applications\" section\n";
+                }
+            }
+
+        private:
+            mimeapps_list_parser &m_parser;
+        };
+
+        bool m_mime_type_change_allowed;
+
+        std::unique_ptr<default_applications_storage> m_applications_storage {};
+        std::unique_ptr<changed_mime_types_storage> m_changed_mime_type_storage {};
+
+        void update_section(std::string_view name) final {
+            if (name == "Default Applications") {
+                m_current_section_handler = std::make_unique<default_applications_handler>(*this);
+            } else if (name == "Added Associations") {
+                m_current_section_handler
+                    = m_mime_type_change_allowed
+                          ? std::make_unique<add_associations_handler>(*this)
+                          : throw std::runtime_error("Added Assocations section not allowed");
+            } else if (name == "Removed Associations") {
+                m_current_section_handler
+                    = m_mime_type_change_allowed
+                          ? std::make_unique<removed_associations_handler>(*this)
+                          : throw std::runtime_error("Removed Assocations section not allowed");
+
+            } else {
+                m_current_section_handler = std::make_unique<section_handler>();
+            }
+        }
+
+    public:
+        mimeapps_list_parser(std::istream &is, bool mime_type_change_allowed) :
+                file_parser_base(is), m_mime_type_change_allowed(mime_type_change_allowed) { }
 
         mimeapps_list_data get_result() && noexcept {
             return {std::move(m_applications_storage), std::move(m_changed_mime_type_storage)};
@@ -349,7 +362,7 @@ namespace xdg::mime_apps {
     }
 
     mimeapps_list_data parse_mimeapps_list(std::istream &is, bool mime_type_change_allowed) {
-        file_parser parser {is, mime_type_change_allowed};
+        mimeapps_list_parser parser {is, mime_type_change_allowed};
         parser.parse();
         return std::move(parser).get_result();
     }
