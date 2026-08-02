@@ -1,0 +1,1 @@
+Rework env handling (including in the library) => Working with potential nullptr is evil

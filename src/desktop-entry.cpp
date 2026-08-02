@@ -143,8 +143,11 @@ namespace xdg::desktop_entry_spec {
             return false;
         }
 
-        std::string_view current_desktop = std::getenv("XDG_CURRENT_DESKTOP");
-        auto only_show_in                = get_only_show_in();
+        auto current_desktop = []() {
+            auto str = std::getenv("XDG_CURRENT_DESKTOP");
+            return str ? std::string_view(str) : std::string_view();
+        }();
+        auto only_show_in = get_only_show_in();
         if (only_show_in) {
             auto it = std::ranges::find(*only_show_in, current_desktop);
             return it != only_show_in->end();
