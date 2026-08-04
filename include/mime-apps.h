@@ -8,16 +8,82 @@
 #include "helper.h"
 
 namespace xdg::mime_apps {
-    using mime_type      = std::string;
+    class mime_type {
+        std::string m_data;
+
+    public:
+        mime_type() = default;
+        mime_type(std::string str) : m_data(std::move(str)) { };
+        mime_type(std::string_view str) : m_data(str) { };
+
+        mime_type(const mime_type &)            = default;
+        mime_type &operator=(const mime_type &) = default;
+        mime_type(mime_type &&)                 = default;
+        mime_type &operator=(mime_type &&)      = default;
+
+        std::string_view str() const noexcept { return m_data; }
+
+        void make_less_specific() noexcept;
+
+        explicit operator bool() const noexcept {
+            return !m_data.empty();
+        }
+
+        bool operator==(const mime_type &other) const noexcept = default;
+
+        friend bool operator==(const mime_type &lhs, std::string_view rhs) noexcept {
+            return lhs.m_data == rhs;
+        }
+
+        friend bool operator==(std::string_view lhs, const mime_type &rhs) noexcept {
+            return lhs == rhs.m_data;
+        }
+
+        friend bool operator==(const mime_type &lhs, const std::string &rhs) noexcept {
+            return lhs.m_data == rhs;
+        }
+
+        friend bool operator==(const std::string &lhs, const mime_type &rhs) noexcept {
+            return lhs == rhs.m_data;
+        }
+
+        std::strong_ordering operator<=>(const mime_type &other) const noexcept = default;
+    };
+
+    inline std::ostream &operator<<(std::ostream &os, const mime_type &type) {
+        return os << type.str();
+    }
+} // namespace xdg::mime_apps
+
+namespace std {
+    template<>
+    class hash<xdg::mime_apps::mime_type> {
+        std::hash<std::string_view> m_hasher {};
+
+    public:
+        auto operator()(const xdg::mime_apps::mime_type &type) const noexcept {
+            return m_hasher(type.str());
+        }
+    };
+} // namespace std
+
+namespace xdg::mime_apps {
     using application_id = desktop_entry_spec::types::application_id;
 
-    class API_PUBLIC default_applications_storage {
+    class API_PUBLIC association_storage {
         std::map<mime_type, std::vector<application_id>> m_storage;
 
     public:
         void add_association(mime_type type, application_id desktop_id) {
             auto [it, success] = m_storage.try_emplace(std::move(type));
             it->second.emplace_back(std::move(desktop_id));
+        }
+
+        void add_association(mime_type type, std::vector<application_id> desktop_ids) {
+            auto [it, success] = m_storage.try_emplace(std::move(type));
+            it->second.insert(it->second.cend(),
+                std::move_iterator(desktop_ids.begin()),
+                std::move_iterator(desktop_ids.end()));
         }
 
         bool set_associations(mime_type type, std::vector<application_id> desktop_ids) {
@@ -36,6 +102,8 @@ namespace xdg::mime_apps {
             return it != m_storage.end() ? std::addressof(it->second) : nullptr;
         }
     };
+
+    class API_PUBLIC default_applications_storage : public association_storage { };
 
     class API_PUBLIC changed_mime_types_storage {
         std::map<mime_type, std::vector<application_id>> m_added_associations;
@@ -114,6 +182,22 @@ namespace xdg::mime_apps {
                 return association_type::Neutral;
             }
         }
+
+        const std::vector<application_id> *get_added_associations(const mime_type &type) const noexcept {
+            auto it = m_added_associations.find(type);
+            return it != m_added_associations.end() ? std::addressof(it->second) : nullptr;
+        }
+
+        const std::vector<application_id> *get_removed_associations(const mime_type &type) const noexcept {
+            auto it = m_removed_associations.find(type);
+            return it != m_removed_associations.end() ? std::addressof(it->second) : nullptr;
+        }
+    };
+
+    class API_PUBLIC mimeinfo_cache_storage : association_storage {
+    public:
+        using association_storage::get_associations;
+        using association_storage::set_associations;
     };
 
     struct mimeapps_list_data {
@@ -123,6 +207,7 @@ namespace xdg::mime_apps {
 
     class API_PUBLIC mimeapps_list_cache {
         std::map<std::filesystem::path, mimeapps_list_data> m_cache;
+        std::map<std::filesystem::path, std::unique_ptr<mimeinfo_cache_storage>> m_mimeinfo_cache_cache;
         std::vector<std::filesystem::path> m_mimeapps_list_locations;
         std::vector<std::filesystem::path> m_mimeapps_list_locations_with_associations;
 
@@ -130,6 +215,7 @@ namespace xdg::mime_apps {
         mimeapps_list_cache();
 
         mimeapps_list_data &read(const std::filesystem::path &path);
+        mimeinfo_cache_storage *read_mimeinfo_cache(const std::filesystem::path &path);
 
         const std::vector<std::filesystem::path> &get_mimeapps_list_locations() const noexcept {
             return m_mimeapps_list_locations;
@@ -144,10 +230,16 @@ namespace xdg::mime_apps {
     mimeapps_list_data API_PUBLIC parse_mimeapps_list(std::filesystem::path path, bool mime_type_change_allowed);
     mimeapps_list_data API_PUBLIC parse_mimeapps_list(std::istream &is, bool mime_type_change_allowed);
 
+    std::unique_ptr<mimeinfo_cache_storage> API_PUBLIC parse_mimeinfo_cache(std::filesystem::path path);
+    std::unique_ptr<mimeinfo_cache_storage> API_PUBLIC parse_mimeinfo_cache(std::istream &is);
+
+    std::vector<application_id> API_PUBLIC get_available_applications_for_mime_type(const mime_type &type, mimeapps_list_cache &cache);
+    std::vector<application_id> API_PUBLIC get_available_applications_for_mime_type(const mime_type &type);
+
     std::optional<desktop_entry_spec::application_entry>
-        API_PUBLIC get_default_app_for_mime_type(const mime_type &mime_type, mimeapps_list_cache &cache);
+        API_PUBLIC get_default_app_for_mime_type(mime_type mime_type, mimeapps_list_cache &cache);
     std::optional<desktop_entry_spec::application_entry>
-        API_PUBLIC get_default_app_for_mime_type(const mime_type &mime_type);
+        API_PUBLIC get_default_app_for_mime_type(mime_type mime_type);
 } // namespace xdg::mime_apps
 
 #endif

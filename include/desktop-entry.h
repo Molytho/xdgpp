@@ -175,6 +175,11 @@ namespace xdg::desktop_entry_spec {
 
     using parsing_error = types::parsing_error;
 
+    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from_predicated(std::vector<std::filesystem::path> stores, std::function<bool(const std::filesystem::path &)> predicate);
+    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from_predicated(std::filesystem::path store, std::function<bool(const std::filesystem::path &)> predicate);
+    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from(std::vector<std::filesystem::path> stores);
+    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from(std::filesystem::path store);
+
     API_PUBLIC std::vector<desktop_entry> get_all_desktop_entries();
     API_PUBLIC std::vector<application_entry> get_all_application_entries();
 

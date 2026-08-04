@@ -245,6 +245,8 @@ namespace xdg::desktop_entry_spec {
         }
 
         bool application_id::operator==(const application_id &) const noexcept = default;
+        std::strong_ordering application_id::operator<=>(const application_id &) const noexcept = default;
+
 
         namespace detail {
             entry_type parse(parse_tag<entry_type>, std::string_view str) {

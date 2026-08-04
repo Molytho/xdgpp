@@ -116,6 +116,7 @@ namespace xdg::desktop_entry_spec::types {
         operator std::string_view() const noexcept;
 
         bool operator==(const application_id &) const noexcept;
+        std::strong_ordering operator<=>(const application_id &) const noexcept;
     };
 
     namespace API_PUBLIC detail {

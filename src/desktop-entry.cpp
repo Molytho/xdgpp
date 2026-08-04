@@ -19,6 +19,49 @@ using namespace std::string_view_literals;
 using namespace xdg::desktop_entry_spec;
 using namespace std::filesystem;
 
+namespace {
+    template<class F>
+    std::vector<desktop_entry>
+        read_desktop_entries_from_predicated_impl(std::vector<std::filesystem::path> stores, F &&predicate) {
+        std::unordered_set<std::filesystem::path> files_read;
+        std::vector<desktop_entry> result;
+
+        for (const std::filesystem::path &application_dir : stores) {
+            try {
+                for (const auto &file : recursive_directory_iterator(application_dir,
+                         directory_options::follow_directory_symlink)) {
+                    if (file.path().extension() != ".desktop") {
+                        continue;
+                    }
+
+                    auto relative_path = file.path().lexically_relative(application_dir);
+                    if (auto [it, success] = files_read.emplace(relative_path); !success) {
+                        // Already read from directory with higher priority
+                        continue;
+                    } else if (!predicate(relative_path)) {
+                        // Ignored by caller
+                        continue;
+                    }
+
+                    try {
+                        result.emplace_back(desktop_entry::from_store(application_dir, relative_path));
+                    } catch (const std::runtime_error &ex) {
+                        std::cerr << "Failed to parse desktop file: " << file << '\n';
+                        continue;
+                    }
+                }
+            } catch (const filesystem_error &ex) {
+                if (ex.code() == std::errc::no_such_file_or_directory) {
+                    continue;
+                }
+                throw;
+            }
+        }
+
+        return result;
+    }
+} // namespace
+
 namespace xdg::desktop_entry_spec {
     template<class F>
     auto on_exit(F &&f) {
@@ -325,41 +368,30 @@ namespace xdg::desktop_entry_spec {
         return is;
     }
 
+    std::vector<desktop_entry> read_desktop_entries_from_predicated(std::vector<std::filesystem::path> stores,
+        std::function<bool(const std::filesystem::path &)> predicate) {
+        return read_desktop_entries_from_predicated_impl(std::move(stores), predicate);
+    }
+
+    std::vector<desktop_entry> read_desktop_entries_from_predicated(std::filesystem::path store,
+        std::function<bool(const std::filesystem::path &)> predicate) {
+        return read_desktop_entries_from_predicated_impl(std::vector {store}, predicate);
+    }
+
+    std::vector<desktop_entry> read_desktop_entries_from(std::vector<std::filesystem::path> stores) {
+        return read_desktop_entries_from_predicated_impl(std::move(stores), [](auto) { return true; });
+    }
+
+    std::vector<desktop_entry> read_desktop_entries_from(std::filesystem::path store) {
+        return read_desktop_entries_from(std::vector {store});
+    }
+
     std::vector<desktop_entry> get_all_desktop_entries() {
-        std::unordered_set<std::filesystem::path> files_read;
-        std::vector<desktop_entry> result;
-
-        for (auto &application_dir : basedir::get_data_dirs_by_priority()) {
-            application_dir /= "applications";
-            try {
-                for (const auto &file : recursive_directory_iterator(application_dir,
-                         directory_options::follow_directory_symlink | directory_options::skip_permission_denied)) {
-                    if (file.path().extension() != ".desktop") {
-                        continue;
-                    }
-
-                    auto relative_path = file.path().lexically_relative(application_dir);
-                    if (auto [it, success] = files_read.emplace(relative_path); !success) {
-                        // Already read from directory with higher priority
-                        continue;
-                    }
-
-                    try {
-                        result.emplace_back(desktop_entry::from_store(application_dir, relative_path));
-                    } catch (const std::runtime_error &ex) {
-                        std::cerr << "Failed to parse desktop file: " << file << '\n';
-                        continue;
-                    }
-                }
-            } catch (const filesystem_error &ex) {
-                if (ex.code() == std::errc::no_such_file_or_directory) {
-                    continue;
-                }
-                throw;
-            }
+        auto stores = basedir::get_data_dirs_by_priority();
+        for (auto &store : stores) {
+            store /= "applications";
         }
-
-        return result;
+        return read_desktop_entries_from(std::move(stores));
     }
 
     std::vector<application_entry> get_all_application_entries() {

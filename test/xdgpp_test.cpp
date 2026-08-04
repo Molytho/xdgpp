@@ -78,7 +78,7 @@ void mime_type_stuff() {
     }
     auto [default_storage, changed_storage] = parse_mimeapps_list(file);
 
-    mime_type png_type       = "image/png";
+    mime_type png_type       = "image/png;i_dont_care"sv;
     auto default_app_for_png = xdg::mime_apps::get_default_app_for_mime_type(png_type);
     if (default_app_for_png) {
         std::cout
