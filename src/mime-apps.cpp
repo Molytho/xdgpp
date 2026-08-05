@@ -2,7 +2,9 @@
 
 #include <cctype>
 #include <fstream>
+#include <map>
 #include <memory>
+#include <set>
 
 #include <boost/regex.hpp>
 
@@ -10,6 +12,29 @@
 #include "private/string_helper.h"
 
 using namespace xdg::mime_apps;
+
+namespace xdg::mime_apps {
+    class mimeapps_list_cache {
+        std::map<std::filesystem::path, mimeapps_list_data> m_cache;
+        std::map<std::filesystem::path, mimeinfo_cache_storage> m_mimeinfo_cache_cache;
+        std::vector<std::filesystem::path> m_mimeapps_list_locations;
+        std::vector<std::filesystem::path> m_mimeapps_list_locations_with_associations;
+
+    public:
+        mimeapps_list_cache();
+
+        mimeapps_list_data &read(const std::filesystem::path &path);
+        mimeinfo_cache_storage *read_mimeinfo_cache(const std::filesystem::path &path);
+
+        const std::vector<std::filesystem::path> &get_mimeapps_list_locations() const noexcept {
+            return m_mimeapps_list_locations;
+        }
+
+        const std::vector<std::filesystem::path> &get_mimeapps_list_locations_with_associations() const noexcept {
+            return m_mimeapps_list_locations_with_associations;
+        }
+    };
+} // namespace xdg::mime_apps
 
 namespace {
     const boost::regex IsCommentRe {"^[ \\t]*(?:#|$)", boost::regex::optimize};
@@ -100,14 +125,10 @@ namespace {
 
     class mimeapps_list_parser : public file_parser_base {
         struct add_associations_handler : section_handler {
-            add_associations_handler(mimeapps_list_parser &parser) : m_parser(parser) {
-                if (!m_parser.m_changed_mime_type_storage) {
-                    m_parser.m_changed_mime_type_storage = std::make_unique<changed_mime_types_storage>();
-                }
-            }
+            add_associations_handler(mimeapps_list_parser &parser) : m_parser(parser) { }
 
             void set_association(mime_type type, std::vector<application_id> value) final {
-                bool is_new = m_parser.m_changed_mime_type_storage->set_associations(std::move(type),
+                bool is_new = m_parser.m_changed_mime_type_storage.set_associations(std::move(type),
                     std::move(value));
                 if (!is_new) {
                     std::cerr
@@ -120,14 +141,10 @@ namespace {
         };
 
         struct removed_associations_handler : section_handler {
-            removed_associations_handler(mimeapps_list_parser &parser) : m_parser(parser) {
-                if (!m_parser.m_changed_mime_type_storage) {
-                    m_parser.m_changed_mime_type_storage = std::make_unique<changed_mime_types_storage>();
-                }
-            }
+            removed_associations_handler(mimeapps_list_parser &parser) : m_parser(parser) { }
 
             void set_association(mime_type type, std::vector<application_id> value) final {
-                bool is_new = m_parser.m_changed_mime_type_storage->remove_associations(std::move(type),
+                bool is_new = m_parser.m_changed_mime_type_storage.remove_associations(std::move(type),
                     std::move(value));
                 if (!is_new) {
                     std::cerr
@@ -140,15 +157,11 @@ namespace {
         };
 
         struct default_applications_handler : section_handler {
-            default_applications_handler(mimeapps_list_parser &parser) : m_parser(parser) {
-                if (!m_parser.m_applications_storage) {
-                    m_parser.m_applications_storage = std::make_unique<default_applications_storage>();
-                }
-            }
+            default_applications_handler(mimeapps_list_parser &parser) : m_parser(parser) { }
 
             void set_association(mime_type type, std::vector<application_id> value) final {
-                bool is_new = m_parser.m_applications_storage->set_associations(std::move(type),
-                    std::move(value));
+                bool is_new
+                    = m_parser.m_applications_storage.set_associations(std::move(type), std::move(value));
                 if (!is_new) {
                     std::cerr
                         << "mimetype appeard multiple times in \"Default Applications\" section\n";
@@ -161,8 +174,8 @@ namespace {
 
         bool m_mime_type_change_allowed;
 
-        std::unique_ptr<default_applications_storage> m_applications_storage {};
-        std::unique_ptr<changed_mime_types_storage> m_changed_mime_type_storage {};
+        default_applications_storage m_applications_storage {};
+        changed_mime_types_storage m_changed_mime_type_storage {};
 
         void update_section(std::string_view name) final {
             if (name == "Default Applications") {
@@ -207,23 +220,20 @@ namespace {
             mimeinfo_cache_storage &m_storage;
         };
 
-        std::unique_ptr<mimeinfo_cache_storage> m_storage {};
+        mimeinfo_cache_storage m_storage {};
 
         void update_section(std::string_view name) final {
             if (name == "MIME Cache") {
-                m_current_section_handler = std::make_unique<mime_cache_handler>(*this->m_storage);
+                m_current_section_handler = std::make_unique<mime_cache_handler>(this->m_storage);
             } else {
                 m_current_section_handler = std::make_unique<section_handler>();
             }
         }
 
     public:
-        mimeinfo_cache_parser(std::istream &is) :
-                file_parser_base(is), m_storage(std::make_unique<mimeinfo_cache_storage>()) { }
+        mimeinfo_cache_parser(std::istream &is) : file_parser_base(is), m_storage() { }
 
-        std::unique_ptr<mimeinfo_cache_storage> get_result() && noexcept {
-            return std::move(m_storage);
-        }
+        mimeinfo_cache_storage get_result() && noexcept { return std::move(m_storage); }
     };
 
     std::vector<std::string> get_desktop_names() {
@@ -330,7 +340,7 @@ namespace {
                 auto &[default_apps, added_removed_types] = cache.read(mimeapp_list);
 
                 if (added_removed_types) {
-                    auto type = added_removed_types->get_association(mime_type, result.entry.get_id());
+                    auto type = added_removed_types.get_association(mime_type, result.entry.get_id());
                     if (type == association_type::Added) {
                         return true;
                     } else if (type == association_type::Removed) {
@@ -362,12 +372,18 @@ namespace {
         if (auto mimeinfo_cache = cache.read_mimeinfo_cache(store / "mimeinfo.cache"); mimeinfo_cache) {
             add_to(result, mimeinfo_cache->get_associations(type));
 
-            for (const auto &entry : std::filesystem::recursive_directory_iterator(store,
-                     std::filesystem::directory_options::follow_directory_symlink)) {
-                if (entry.path().extension() != ".desktop") {
-                    continue;
+            try {
+                for (const auto &entry : std::filesystem::recursive_directory_iterator(store,
+                         std::filesystem::directory_options::follow_directory_symlink)) {
+                    if (entry.path().extension() != ".desktop") {
+                        continue;
+                    }
+                    blacklist.emplace(entry.path().lexically_relative(store));
                 }
-                blacklist.emplace(entry.path().lexically_relative(store));
+            } catch (const std::filesystem::filesystem_error &ex) {
+                if (ex.code() != std::errc::no_such_file_or_directory) {
+                    throw;
+                }
             }
         } else {
             auto is_not_blacklisted = [&blacklist](const std::filesystem::path &path) {
@@ -389,9 +405,56 @@ namespace {
             }
         }
     }
+
+    void remove_association_from(std::map<mime_type, std::vector<application_id>> &map,
+        const mime_type &type, const application_id &desktop_id) {
+        auto it = map.find(type);
+        if (it != map.end()) {
+            std::erase(it->second, desktop_id);
+        }
+    }
+
+    void add_association_to(std::map<mime_type, std::vector<application_id>> &map, mime_type type,
+        application_id desktop_id) {
+        auto [it, success] = map.try_emplace(std::move(type));
+        it->second.emplace_back(std::move(desktop_id));
+    }
+
+    bool set_associations_in(std::map<mime_type, std::vector<application_id>> &map, mime_type type,
+        std::vector<application_id> desktop_ids) {
+        auto [it, is_new] = map.try_emplace(std::move(type));
+        it->second        = std::move(desktop_ids);
+        return is_new;
+    }
+
+    bool contains_association(const std::map<mime_type, std::vector<application_id>> &map,
+        const mime_type &type, const application_id &desktop_id) {
+        auto it = map.find(type);
+        if (it != map.end()) {
+            if (std::ranges::find(it->second, desktop_id) != it->second.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
 } // namespace
 
 namespace xdg::mime_apps {
+    mime_type::mime_type() = default;
+
+    mime_type::mime_type(std::string str) : m_data(std::move(str)) { }
+
+    mime_type::mime_type(std::string_view str) : m_data(str) { }
+
+    mime_type::mime_type(const mime_type &)            = default;
+    mime_type &mime_type::operator=(const mime_type &) = default;
+    mime_type::mime_type(mime_type &&)                 = default;
+    mime_type &mime_type::operator=(mime_type &&)      = default;
+
+    std::string_view mime_type::str() const noexcept {
+        return m_data;
+    }
+
     void mime_type::make_less_specific() noexcept {
         auto pos = m_data.find_last_of("/+;");
         if (pos == std::string::npos) {
@@ -399,6 +462,177 @@ namespace xdg::mime_apps {
         } else {
             m_data.resize(pos);
         }
+    }
+
+    mime_type::operator bool() const noexcept {
+        return !m_data.empty();
+    }
+
+    bool mime_type::operator==(const mime_type &other) const noexcept = default;
+
+    bool operator==(const mime_type &lhs, std::string_view rhs) noexcept {
+        return std::string_view(lhs.m_data) == rhs;
+    }
+
+    bool operator==(std::string_view lhs, const mime_type &rhs) noexcept {
+        return lhs == std::string_view(rhs.m_data);
+    }
+
+    bool operator==(const mime_type &lhs, const std::string &rhs) noexcept {
+        return lhs.m_data == rhs;
+    }
+
+    bool operator==(const std::string &lhs, const mime_type &rhs) noexcept {
+        return lhs == rhs.m_data;
+    }
+
+    std::strong_ordering mime_type::operator<=>(const mime_type &other) const noexcept = default;
+
+    std::ostream &operator<<(std::ostream &os, const mime_type &type) {
+        return os << type.str();
+    }
+
+    struct association_storage::data {
+        std::map<mime_type, std::vector<application_id>> storage;
+    };
+
+    association_storage::data *association_storage::get_or_init_data() {
+        if (!m_data) {
+            m_data = std::make_unique<association_storage::data>();
+        }
+        return m_data.get();
+    }
+
+    association_storage::association_storage()                                  = default;
+    association_storage::association_storage(association_storage &&)            = default;
+    association_storage &association_storage::operator=(association_storage &&) = default;
+
+    association_storage::~association_storage() = default;
+
+    void association_storage::add_association(mime_type type, application_id desktop_id) {
+        auto [it, success] = get_or_init_data()->storage.try_emplace(std::move(type));
+        it->second.emplace_back(std::move(desktop_id));
+    }
+
+    void association_storage::add_association(mime_type type, std::vector<application_id> desktop_ids) {
+        auto [it, success] = get_or_init_data()->storage.try_emplace(std::move(type));
+        it->second.insert(it->second.cend(),
+            std::move_iterator(desktop_ids.begin()),
+            std::move_iterator(desktop_ids.end()));
+    }
+
+    bool association_storage::set_associations(mime_type type, std::vector<application_id> desktop_ids) {
+        auto [it, is_new] = get_or_init_data()->storage.try_emplace(std::move(type));
+        it->second        = std::move(desktop_ids);
+        return is_new;
+    }
+
+    const std::vector<application_id> *association_storage::get_associations(const mime_type &type) const noexcept {
+        if (!m_data) {
+            return nullptr;
+        }
+        auto it = m_data->storage.find(type);
+        return it != m_data->storage.end() ? std::addressof(it->second) : nullptr;
+    }
+
+    std::vector<application_id> *association_storage::get_associations(const mime_type &type) noexcept {
+        if (!m_data) {
+            return nullptr;
+        }
+        auto it = m_data->storage.find(type);
+        return it != m_data->storage.end() ? std::addressof(it->second) : nullptr;
+    }
+
+    association_storage::operator bool() const noexcept {
+        return bool(m_data);
+    }
+
+    struct changed_mime_types_storage::data {
+        std::map<mime_type, std::vector<application_id>> added_associations;
+        std::map<mime_type, std::vector<application_id>> removed_associations;
+    };
+
+    changed_mime_types_storage::data &changed_mime_types_storage::get_or_init_data() {
+        if (!m_data) {
+            m_data = std::make_unique<data>();
+        }
+        return *m_data;
+    }
+
+    changed_mime_types_storage::changed_mime_types_storage()                              = default;
+    changed_mime_types_storage::changed_mime_types_storage(changed_mime_types_storage &&) = default;
+    changed_mime_types_storage &changed_mime_types_storage::operator=(changed_mime_types_storage &&) = default;
+    changed_mime_types_storage::~changed_mime_types_storage() = default;
+
+    void changed_mime_types_storage::add_association(mime_type type, application_id desktop_id) {
+        auto &data = get_or_init_data();
+        remove_association_from(data.removed_associations, type, desktop_id);
+        add_association_to(data.added_associations, std::move(type), std::move(desktop_id));
+    }
+
+    bool changed_mime_types_storage::set_associations(mime_type type, std::vector<application_id> desktop_ids) {
+        auto &data = get_or_init_data();
+        for (const application_id &id : desktop_ids) {
+            remove_association_from(data.removed_associations, type, id);
+        }
+        return set_associations_in(data.added_associations, std::move(type), std::move(desktop_ids));
+    }
+
+    void changed_mime_types_storage::remove_association(mime_type type, application_id desktop_id) {
+        auto &data = get_or_init_data();
+        remove_association_from(data.added_associations, type, desktop_id);
+        add_association_to(data.removed_associations, std::move(type), std::move(desktop_id));
+    }
+
+    bool changed_mime_types_storage::remove_associations(mime_type type, std::vector<application_id> desktop_ids) {
+        auto &data = get_or_init_data();
+        for (const application_id &id : desktop_ids) {
+            remove_association_from(data.added_associations, type, id);
+        }
+        return set_associations_in(data.removed_associations, std::move(type), std::move(desktop_ids));
+    }
+
+    void changed_mime_types_storage::clear_association(const mime_type &type, const application_id &desktop_id) {
+        if (m_data) {
+            remove_association_from(m_data->added_associations, type, desktop_id);
+            remove_association_from(m_data->removed_associations, type, desktop_id);
+        }
+    }
+
+    changed_mime_types_storage::association_type changed_mime_types_storage::get_association(
+        const mime_type &type, const application_id &desktop_id
+    ) const {
+        if (!m_data) {
+            return association_type::Neutral;
+        } else if (contains_association(m_data->added_associations, type, desktop_id)) {
+            return association_type::Added;
+        } else if (contains_association(m_data->removed_associations, type, desktop_id)) {
+            return association_type::Removed;
+        } else {
+            return association_type::Neutral;
+        }
+    }
+
+    const std::vector<application_id> *
+        changed_mime_types_storage::get_added_associations(const mime_type &type) const noexcept {
+        if (!m_data) {
+            return nullptr;
+        }
+        auto it = m_data->added_associations.find(type);
+        return it != m_data->added_associations.end() ? std::addressof(it->second) : nullptr;
+    }
+
+    const std::vector<application_id> *
+        changed_mime_types_storage::get_removed_associations(const mime_type &type) const noexcept {
+        if (!m_data) {
+            return nullptr;
+        }
+        auto it = m_data->removed_associations.find(type);
+        return it != m_data->removed_associations.end() ? std::addressof(it->second) : nullptr;
+    }
+
+    changed_mime_types_storage::operator bool() const noexcept {
+        return bool(m_data);
     }
 
     mimeapps_list_cache::mimeapps_list_cache() :
@@ -426,10 +660,10 @@ namespace xdg::mime_apps {
     mimeinfo_cache_storage *mimeapps_list_cache::read_mimeinfo_cache(const std::filesystem::path &path) {
         auto it = m_mimeinfo_cache_cache.find(path);
         if (it != m_mimeinfo_cache_cache.end()) {
-            return it->second.get();
+            return std::addressof(it->second);
         }
 
-        std::unique_ptr<mimeinfo_cache_storage> data;
+        mimeinfo_cache_storage data;
         try {
             data = parse_mimeinfo_cache(path);
         } catch (const std::runtime_error &) {
@@ -438,7 +672,7 @@ namespace xdg::mime_apps {
 
         auto [new_it, success] = m_mimeinfo_cache_cache.emplace(path, std::move(data));
         assert(success);
-        return new_it->second.get();
+        return std::addressof(new_it->second);
     }
 
     mimeapps_list_data parse_mimeapps_list(std::filesystem::path path) {
@@ -460,7 +694,7 @@ namespace xdg::mime_apps {
         return std::move(parser).get_result();
     }
 
-    std::unique_ptr<mimeinfo_cache_storage> parse_mimeinfo_cache(std::filesystem::path path) {
+    mimeinfo_cache_storage parse_mimeinfo_cache(std::filesystem::path path) {
         std::ifstream file {path};
         if (!file.is_open()) {
             throw std::runtime_error("Could not open file");
@@ -468,7 +702,7 @@ namespace xdg::mime_apps {
         return parse_mimeinfo_cache(file);
     }
 
-    std::unique_ptr<mimeinfo_cache_storage> parse_mimeinfo_cache(std::istream &is) {
+    mimeinfo_cache_storage parse_mimeinfo_cache(std::istream &is) {
         mimeinfo_cache_parser parser {is};
         parser.parse();
         return std::move(parser).get_result();
@@ -485,10 +719,10 @@ namespace xdg::mime_apps {
 
         for (auto path : cache.get_mimeapps_list_locations_with_associations()) {
             if (auto &[ignore, edited_associations] = cache.read(path); edited_associations) {
-                if (auto added = edited_associations->get_added_associations(type); added) {
+                if (auto added = edited_associations.get_added_associations(type); added) {
                     add_to(result, std::views::filter(*added, is_not_blacklisted));
                 }
-                add_to(blacklist, edited_associations->get_removed_associations(type));
+                add_to(blacklist, edited_associations.get_removed_associations(type));
             }
 
             if (is_application_store(path)) {
@@ -514,7 +748,7 @@ namespace xdg::mime_apps {
                     continue;
                 }
 
-                const auto *associations = default_apps->get_associations(mime_type);
+                const auto *associations = default_apps.get_associations(mime_type);
                 if (!associations) {
                     continue;
                 }
@@ -543,4 +777,9 @@ namespace xdg::mime_apps {
         mimeapps_list_cache cache {};
         return get_default_app_for_mime_type(std::move(mime_type), cache);
     }
+
+    std::unique_ptr<mimeapps_list_cache> make_cache() {
+        return std::make_unique<mimeapps_list_cache>();
+    }
+
 } // namespace xdg::mime_apps
