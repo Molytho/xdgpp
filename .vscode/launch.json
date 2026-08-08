@@ -5,10 +5,10 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Launch xdgpp_test",
-            "program": "${workspaceFolder}/build/xdgpp_test",
+            "program": "${workspaceFolder}/build/lib/xdgpp_test",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/build/",
-            "preLaunchTask": "Meson: Build xdgpp_test:executable"
+            "preLaunchTask": "Meson: Build lib/xdgpp_test:executable"
         }
     ]
 }
