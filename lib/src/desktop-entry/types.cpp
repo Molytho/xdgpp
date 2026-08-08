@@ -76,9 +76,22 @@ namespace {
         return result;
     }
 
-    std::filesystem::path calculate_path_from_id(std::string str) {
-        std::ranges::replace(str, '-', '/');
-        return str;
+    void calculate_paths_from_id_helper(std::vector<std::filesystem::path> &buffer, std::string str,
+        size_t current_pos = 0) {
+        auto replace_pos = str.find('-', current_pos);
+        if (replace_pos == str.npos) {
+            buffer.push_back(std::move(str));
+        } else {
+            calculate_paths_from_id_helper(buffer, str, replace_pos + 1);
+            str.at(replace_pos) = '/';
+            calculate_paths_from_id_helper(buffer, std::move(str), replace_pos + 1);
+        }
+    }
+
+    std::vector<std::filesystem::path> calculate_paths_from_id(std::string str) {
+        std::vector<std::filesystem::path> result {};
+        calculate_paths_from_id_helper(result, std::move(str));
+        return result;
     }
 
     [[noreturn]] void throw_parsing_error(std::string_view type, std::string_view value) {
@@ -236,8 +249,8 @@ namespace xdg::desktop_entry_spec {
         application_id::application_id(application_id &&) noexcept            = default;
         application_id &application_id::operator=(application_id &&) noexcept = default;
 
-        std::filesystem::path application_id::to_path() const {
-            return calculate_path_from_id(m_id);
+        std::vector<std::filesystem::path> application_id::to_paths() const {
+            return calculate_paths_from_id(m_id);
         }
 
         application_id::operator std::string_view() const noexcept {

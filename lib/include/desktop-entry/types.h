@@ -111,7 +111,7 @@ namespace xdg::desktop_entry_spec::types {
         application_id(application_id &&) noexcept;
         application_id &operator=(application_id &&) noexcept;
 
-        std::filesystem::path to_path() const;
+        std::vector<std::filesystem::path> to_paths() const;
 
         operator std::string_view() const noexcept;
 
