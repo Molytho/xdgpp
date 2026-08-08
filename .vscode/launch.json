@@ -13,14 +13,26 @@
         {
             "type": "lldb-dap",
             "request": "launch",
-            "name": "Launch launch",
-            "program": "${workspaceFolder}/build/utils/launch/xdgpp_launch",
+            "name": "Launch xdgpp_launch",
+            "program": "${workspaceFolder}/build/utils/xdgpp_launch",
             "args": [
                 "/home/robin/"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/build/utils/launch/",
-            "preLaunchTask": "Meson: Build utils/launch/xdgpp_launch:executable"
+            "preLaunchTask": "Meson: Build utils/xdgpp_launch:executable"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Launch xdgpp_open",
+            "program": "${workspaceFolder}/build/utils/xdgpp_open",
+            "args": [
+                "https://kit.edu/"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/build/utils/launch/",
+            "preLaunchTask": "Meson: Build utils/xdgpp_open:executable"
         }
     ]
 }

@@ -7,4 +7,4 @@ project(
 )
 
 subdir('lib')
-subdir('utils/launch')
+subdir('utils')
