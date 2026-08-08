@@ -26,10 +26,10 @@ namespace xdg::mime_apps {
         explicit operator bool() const noexcept;
 
         bool operator==(const mime_type &other) const noexcept;
-        friend bool operator==(const mime_type &lhs, std::string_view rhs) noexcept;
-        friend bool operator==(std::string_view lhs, const mime_type &rhs) noexcept;
-        friend bool operator==(const mime_type &lhs, const std::string &rhs) noexcept;
-        friend bool operator==(const std::string &lhs, const mime_type &rhs) noexcept;
+        friend API_PUBLIC bool operator==(const mime_type &lhs, std::string_view rhs) noexcept;
+        friend API_PUBLIC bool operator==(std::string_view lhs, const mime_type &rhs) noexcept;
+        friend API_PUBLIC bool operator==(const mime_type &lhs, const std::string &rhs) noexcept;
+        friend API_PUBLIC bool operator==(const std::string &lhs, const mime_type &rhs) noexcept;
         std::strong_ordering operator<=>(const mime_type &other) const noexcept;
     };
 

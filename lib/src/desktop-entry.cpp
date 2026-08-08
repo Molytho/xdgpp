@@ -75,23 +75,73 @@ namespace xdg::desktop_entry_spec {
     }
 
     namespace detail {
-        std::string make_command_line(std::string_view exec, std::string_view name,
-            [[maybe_unused]] std::vector<std::string> launch_args, [[maybe_unused]] bool are_uri) {
-            // TODO: Support uris and files
-            static const boost::regex ignored_keys {"(?<!%)((?:%%)*)%[fFuU]"};
-            static const boost::regex percent_re {"%%"};
-            static const boost::regex uneven_percents_re {"(?<!%)(?:%%)*%(?!%)"};
-            // TODO: Some are unsupported
-            static const boost::regex unsupported_re {"(?<!%)((?:%%)*)%[ik]"};
-            static const boost::regex name_re {"(?<!%)((?:%%)*)%c"};
-            std::string cmdline {exec};
-            cmdline = boost::regex_replace(std::move(cmdline), ignored_keys, "$1");
-            cmdline = boost::regex_replace(std::move(cmdline), unsupported_re, "$1");
-            cmdline = boost::regex_replace(std::move(cmdline), name_re, name);
-            if (boost::regex_search(cmdline, uneven_percents_re)) {
-                throw std::runtime_error("Invalid desktop file Exec entry");
+        std::string make_command_line(const make_command_line_interface &iface,
+            std::vector<std::string> launch_args, bool are_uri) {
+            auto exec = iface.get_exec();
+
+            std::string cmdline {};
+            cmdline.reserve(exec.size());
+
+            auto current_it = exec.begin();
+            auto next_pos   = exec.find('%');
+            while (next_pos != exec.npos) {
+                if (next_pos + 1 >= exec.size()) {
+                    throw std::runtime_error("% at the end of the string");
+                }
+
+                auto next_it = exec.begin() + next_pos;
+                cmdline.append(current_it, next_it);
+
+                switch (*(next_it + 1)) {
+                case 'f':
+                    if (are_uri) {
+                        throw std::runtime_error("Uris not supported");
+                    }
+                    [[fallthrough]];
+                case 'u':
+                    if (launch_args.size() > 1) {
+                        throw std::runtime_error("Desktop file only supports one argument");
+                    } else if (launch_args.size() == 1) {
+                        cmdline.push_back('\"');
+                        cmdline.append(launch_args.at(0));
+                        cmdline.push_back('\"');
+                    }
+                    break;
+                case 'F':
+                    if (are_uri) {
+                        throw std::runtime_error("Uris not supported");
+                    }
+                    [[fallthrough]];
+                case 'U':
+                    for (const auto &arg : launch_args) {
+                        cmdline.push_back('\"');
+                        cmdline.append(arg);
+                        cmdline.push_back('\"');
+                    }
+                    break;
+                case 'i': {
+                    auto icon = iface.get_icon();
+                    if (!icon.empty()) {
+                        cmdline.append("--icon \"");
+                        cmdline.append(icon);
+                        cmdline.push_back('"');
+                    }
+                    break;
+                }
+                case 'c':
+                    cmdline.append(iface.get_name());
+                    break;
+                case '%':
+                    cmdline.push_back('%');
+                    break;
+                default:
+                    throw std::runtime_error("Unsupported % escape");
+                }
+
+                current_it = next_it + 2;
+                next_pos   = exec.find('%', next_pos + 1);
             }
-            cmdline = boost::regex_replace(std::move(cmdline), percent_re, "%");
+            cmdline.append(current_it, exec.end());
             return cmdline;
         }
 
@@ -114,6 +164,32 @@ namespace xdg::desktop_entry_spec {
         API_PUBLIC bool launch_impl<application_entry>::get_terminal() const {
             return get_derived()->get_terminal();
         }
+
+        template<class T>
+        API_PUBLIC std::string launch_impl<T>::make_command_line(std::vector<std::string> args, bool are_uris) const {
+            struct impl : make_command_line_interface {
+                const T &action;
+
+                impl(const T &a) : action(a) { }
+
+                std::string_view get_exec() const override { return action.get_exec(); }
+
+                std::string_view get_icon() const override {
+                    auto icon = action.get_icon();
+                    return icon ? icon->get() : std::string_view();
+                }
+
+                std::string_view get_name() const override { return action.get_name().get(); }
+            };
+
+            return xdg::desktop_entry_spec::detail::make_command_line(impl {*get_derived()}, std::move(args), are_uris);
+        }
+
+        template std::string launch_impl<application_entry>::make_command_line(std::vector<std::string> args,
+            bool are_uris) const;
+        template std::string launch_impl<application_entry_action>::make_command_line(
+            std::vector<std::string> args, bool are_uris
+        ) const;
     } // namespace detail
 
     desktop_entry desktop_entry::from_istream(std::istream &is) {

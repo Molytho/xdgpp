@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <ranges>
 #include <string_view>
 #include <vector>
 
@@ -20,7 +21,13 @@ namespace xdg::desktop_entry_spec {
     };
 
     namespace API_PUBLIC detail {
-        std::string make_command_line(std::string_view exec, std::string_view name,
+        struct make_command_line_interface {
+            virtual std::string_view get_exec() const = 0;
+            virtual std::string_view get_name() const = 0;
+            virtual std::string_view get_icon() const = 0;
+        };
+
+        std::string make_command_line(const make_command_line_interface &iface,
             std::vector<std::string> launch_args, bool are_uri);
 
         template<class Derived>
@@ -31,14 +38,14 @@ namespace xdg::desktop_entry_spec {
 
             std::string_view get_path() const;
             bool get_terminal() const;
+            std::string make_command_line(std::vector<std::string> args, bool are_uris) const;
 
         public:
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
             void launch(F &&launcher, std::vector<std::string> args, bool are_uris) const {
                 launch_parameters params {
-                    .command_list
-                    = make_command_line(get_derived()->get_exec(), get_derived()->get_name().get(), std::move(args), are_uris),
+                    .command_list      = make_command_line(std::move(args), are_uris),
                     .working_directory = get_path(),
                     .terminal          = get_terminal()
                 };
@@ -47,8 +54,31 @@ namespace xdg::desktop_entry_spec {
 
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
+            void launch(F &&launcher, std::string arg, bool is_uri) const {
+                launch(std::forward<F>(launcher), std::vector {arg}, is_uri);
+            }
+
+            template<class F>
+                requires std::is_invocable_v<F, launch_parameters &>
+            void launch(F &&launcher, std::vector<std::filesystem::path> p_args) const {
+                auto args = [&]() -> std::vector<std::string> {
+                    auto view = std::views::transform(p_args,
+                        [](const std::filesystem::path &path) { return path.string(); });
+                    return {begin(view), end(view)};
+                }();
+                launch(std::forward<F>(launcher), std::move(args), false);
+            }
+
+            template<class F>
+                requires std::is_invocable_v<F, launch_parameters &>
+            void launch(F &&launcher, std::filesystem::path arg) const {
+                launch(std::forward<F>(launcher), arg.string(), false);
+            }
+
+            template<class F>
+                requires std::is_invocable_v<F, launch_parameters &>
             void launch(F &&launcher) const {
-                launch(std::forward<F>(launcher), {}, false);
+                launch(std::forward<F>(launcher), std::vector<std::string> {}, false);
             }
         };
     } // namespace API_PUBLIC detail
@@ -175,8 +205,11 @@ namespace xdg::desktop_entry_spec {
 
     using parsing_error = types::parsing_error;
 
-    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from_predicated(std::vector<std::filesystem::path> stores, std::function<bool(const std::filesystem::path &)> predicate);
-    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from_predicated(std::filesystem::path store, std::function<bool(const std::filesystem::path &)> predicate);
+    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from_predicated(
+        std::vector<std::filesystem::path> stores, std::function<bool(const std::filesystem::path &)> predicate
+    );
+    API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from_predicated(std::filesystem::path store,
+        std::function<bool(const std::filesystem::path &)> predicate);
     API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from(std::vector<std::filesystem::path> stores);
     API_PUBLIC std::vector<desktop_entry> read_desktop_entries_from(std::filesystem::path store);
 
