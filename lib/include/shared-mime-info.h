@@ -1,6 +1,8 @@
 #ifndef LIB_XDGPP_SHARED_MIME_INFO_H
 #define LIB_XDGPP_SHARED_MIME_INFO_H
 
+#include <filesystem>
+#include <span>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -75,6 +77,10 @@ namespace xdg::shared_mime_info {
     };
 
     static_assert(std::input_iterator<mime_type_parent_iterator>);
+
+    API_PUBLIC mime_type determine_mime_type(const std::filesystem::path &path,
+        bool follow_symlinks = true, bool filename_only = false);
+    API_PUBLIC mime_type determine_mime_type(std::span<std::byte> data);
 } // namespace xdg::shared_mime_info
 
 #endif

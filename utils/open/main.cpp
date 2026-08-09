@@ -1,12 +1,11 @@
 #include "desktop-entry.h"
 #include "mime-apps.h"
+#include "shared-mime-info.h"
 
-#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 
 #include <sys/wait.h>
@@ -14,73 +13,12 @@
 
 #include <boost/regex.hpp>
 
-#include "checked_c_call.h"
-#include "fd_helper.h"
 #include "spawn_helper.h"
 
-using namespace xdg::desktop_entry_spec;
-using namespace xdg::mime_apps;
 using namespace std::string_literals;
-using namespace molytho::checked;
-
-using owned_fd = molytho::ownership_wrapper::owned_fd;
-
-std::pair<owned_fd, owned_fd> make_pipe() {
-    std::array<int, 2> fds {-1, -1};
-    check_zero(pipe(fds.data()));
-    return {fds.at(0), fds.at(1)};
-}
-
-std::vector<char> read_fd(int fd) {
-    constexpr size_t initial_buffer_size = 50;
-    constexpr size_t resize_threshold    = 10;
-    std::vector<char> buffer {};
-    buffer.resize(initial_buffer_size);
-
-    size_t current_index = 0;
-    ssize_t res;
-    while ((res = read(fd, &buffer.at(current_index), buffer.size() - current_index)) > 0) {
-        current_index += res;
-        if (buffer.size() - current_index < resize_threshold) {
-            buffer.resize(buffer.size() * 2);
-        }
-    }
-    check_ge_zero(res);
-
-    return buffer;
-}
-
-mime_type get_mimetype(const std::filesystem::path &file) {
-    auto [read_fd, write_fd] = make_pipe();
-    pid_t pid                = check_ge_zero(fork());
-    if (pid == 0) {
-        // Child
-        read_fd.reset();
-        check_ge_zero(dup2(write_fd, 1));
-        check_ge_zero(dup2(write_fd, 2));
-        execlp("xdg-mime", "xdg-mime", "query", "filetype", file.native().c_str(), nullptr);
-        throw std::system_error(errno, std::system_category());
-    } else {
-        // Parent
-        write_fd.reset();
-        int status {};
-        check_ge_zero(waitpid(pid, &status, 0));
-        bool child_success           = WIFEXITED(status) && WEXITSTATUS(status) == 0;
-        std::vector<char> chars_read = ::read_fd(read_fd);
-
-        if (child_success) {
-            auto it = std::ranges::find(chars_read, '\n');
-            if (it != chars_read.end()) {
-                std::string_view view {chars_read.begin(), it};
-                return view;
-            }
-        }
-
-        throw std::runtime_error(
-            "xdg-mime failed: "s.append(std::string_view {chars_read.begin(), chars_read.end()})
-        );
-    }
-}
+using namespace xdg::mime_apps;
+using namespace xdg::shared_mime_info;
+using namespace xdg::desktop_entry_spec;
 
 [[noreturn]] void show_usage() {
     // TODO
@@ -119,7 +57,7 @@ int open_file_path(std::filesystem::path path) {
         return 4;
     }
 
-    auto mime_type   = get_mimetype(path);
+    auto mime_type = determine_mime_type(path);
     auto default_app = xdg::mime_apps::get_default_app_for_mime_type(mime_type);
     if (default_app) {
         default_app->launch(make_launch_impl(default_app->get_id()), path, false);

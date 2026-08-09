@@ -2,11 +2,16 @@
 
 #include <memory>
 #include <stdexcept>
-#include <stdexcept>
+#include <string>
+
+#include <fcntl.h>
+#include <sys/stat.h>
 
 // TODO: Figure out a good way to override this prefix in the library build
 #define XDG_PREFIX xdg_test
 #include "xdgmime.h"
+
+using namespace std::string_literals;
 
 namespace xdg::shared_mime_info {
     mime_type::mime_type() = default;
@@ -118,5 +123,47 @@ namespace xdg::shared_mime_info {
 
     bool mime_type_parent_iterator::operator==(std::default_sentinel_t) const noexcept {
         return m_current_layer.empty();
+    }
+
+    mime_type determine_mime_type(const std::filesystem::path &path, bool follow_symlinks, bool filename_only) {
+        const char *result;
+        if (filename_only) {
+            auto basename = path.filename();
+            result        = xdg_mime_get_mime_type_from_file_name(basename.c_str());
+        } else {
+            // xdgmime does not support the inode types. Work around this by doing a stat ourselves
+            struct stat statbuf {};
+            int res = fstatat(AT_FDCWD, path.c_str(), &statbuf, follow_symlinks ? 0 : AT_SYMLINK_NOFOLLOW);
+            if (res != 0) {
+                throw std::system_error(errno, std::system_category());
+            }
+            if (S_ISBLK(statbuf.st_mode)) {
+                return "inode/blockdevice"s;
+            } else if (S_ISCHR(statbuf.st_mode)) {
+                return "inode/chardevice"s;
+            } else if (S_ISDIR(statbuf.st_mode)) {
+                return "inode/directory"s;
+            } else if (S_ISFIFO(statbuf.st_mode)) {
+                return "inode/fifo"s;
+            } else if (S_ISSOCK(statbuf.st_mode)) {
+                return "inode/socket"s;
+            } else if (S_ISLNK(statbuf.st_mode)) {
+                return "inode/symlink"s;
+            } else {
+                result = xdg_mime_get_mime_type_for_file(path.c_str(), &statbuf);
+            }
+        }
+        if (!result) {
+            throw std::runtime_error("Failed to determine_mime_type");
+        }
+        return std::string(result);
+    }
+
+    mime_type determine_mime_type(std::span<std::byte> data) {
+        const char *result = xdg_mime_get_mime_type_for_data(data.data(), data.size(), nullptr);
+        if (!result) {
+            throw std::runtime_error("Failed to determine_mime_type");
+        }
+        return std::string(result);
     }
 } // namespace xdg::shared_mime_info
