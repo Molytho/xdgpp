@@ -16,7 +16,7 @@
             "name": "Launch xdgpp_launch",
             "program": "${workspaceFolder}/build/utils/xdgpp_launch",
             "args": [
-                "/home/robin/"
+                "firefox.desktop"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/build/utils/launch/",

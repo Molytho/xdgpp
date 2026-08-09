@@ -6,7 +6,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <utility>
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -25,42 +24,16 @@ using namespace xdg::desktop_entry_spec;
     std::exit(1);
 }
 
-void launch_impl(std::string app_id, launch_parameters &params) {
-    spawn_context context {
-        .executable        = "sh",
-        .arguments         = {"-c", std::move(params.command_list)},
-        .environ           = {},
-        .working_directory = std::string(params.working_directory),
-        .unit_name         = "app-" + app_id + "-" + make_unique_identifier(),
-        .slice             = "app-" + app_id + ".slice",
-    };
-    spawn_as_service(context);
-}
-
-[[nodiscard]] std::string make_id(const application_id &app_id) {
-    auto id = std::string(app_id);
-    assert(id.ends_with(".desktop"));
-    id.resize(id.size() - 8);
-    id = escape_systemd_string(id, false);
-    return id;
-}
-
-auto make_launch_impl(const application_id &app_id) {
-    return [app_id = make_id(app_id)](launch_parameters &params) {
-        launch_impl(std::string(app_id), params);
-    };
-}
-
 int open_file_path(std::filesystem::path path) {
     if (!exists(path)) {
         std::cerr << "Path not valid\n";
         return 4;
     }
 
-    auto mime_type = determine_mime_type(path);
+    auto mime_type   = determine_mime_type(path);
     auto default_app = xdg::mime_apps::get_default_app_for_mime_type(mime_type);
     if (default_app) {
-        default_app->launch(make_launch_impl(default_app->get_id()), path, false);
+        spawn_as_service(*default_app, path, false);
         return 0;
     } else {
         std::cerr << "No application associated with mime_type: " << mime_type << '\n';
@@ -72,7 +45,7 @@ int open_uri(std::string_view scheme, std::string uri) {
     mime_type mime_type = "x-scheme-handler/"s.append(scheme);
     auto default_app    = xdg::mime_apps::get_default_app_for_mime_type(mime_type);
     if (default_app) {
-        default_app->launch(make_launch_impl(default_app->get_id()), uri, true);
+        spawn_as_service(*default_app, uri, true);
         return 0;
     } else {
         std::cerr << "No application associated with mime_type: " << mime_type << '\n';

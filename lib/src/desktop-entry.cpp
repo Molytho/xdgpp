@@ -200,21 +200,23 @@ namespace xdg::desktop_entry_spec {
         return entry;
     }
 
-    desktop_entry desktop_entry::from_store(std::filesystem::path store, std::filesystem::path relative_path) {
-        auto path = store / relative_path;
+    desktop_entry desktop_entry::from_path(std::filesystem::path path) {
         if (!exists(path)) {
             throw std::filesystem::filesystem_error("File does not exist",
                 path,
                 std::make_error_code(std::errc::no_such_file_or_directory));
         }
 
-        std::ifstream is {store / relative_path};
+        std::ifstream is {path};
         if (!is.is_open()) {
             throw std::runtime_error("Failed to open file");
         }
 
-        auto entry = application_entry::from_istream(is);
+        return application_entry::from_istream(is);
+    }
 
+    desktop_entry desktop_entry::from_store(std::filesystem::path store, std::filesystem::path relative_path) {
+        auto entry = from_path(store / relative_path);
         if (entry.get_type() == types::entry_type::Application) {
             application_entry aentry {std::move(entry)};
             aentry.set_id(types::application_id(relative_path));

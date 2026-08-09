@@ -99,6 +99,7 @@ namespace xdg::desktop_entry_spec {
     class API_PUBLIC desktop_entry {
     public:
         static desktop_entry from_istream(std::istream &is);
+        static desktop_entry from_path(std::filesystem::path path);
         static desktop_entry from_store(std::filesystem::path store, std::filesystem::path relative_path);
 
         desktop_entry() = default;

@@ -195,6 +195,18 @@ std::string escape_systemd_string(std::string_view str, bool start_of_string) {
     return result;
 }
 
+[[nodiscard]] std::string make_id(const xdg::desktop_entry_spec::application_entry &entry) {
+    auto id = std::string(entry.get_id());
+    if (id.empty()) {
+        id = entry.get_name().get();
+    } else {
+        assert(id.ends_with(".desktop"));
+        id.resize(id.size() - 8);
+    }
+    id = escape_systemd_string(id, false);
+    return id;
+}
+
 void spawn_as_service(spawn_context &context) {
     spawn_as_impl(make_service_parameters_instance, context);
 }
