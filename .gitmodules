@@ -1,0 +1,3 @@
+[submodule "subprojects/xdgmime"]
+	path = subprojects/xdgmime
+	url = https://gitlab.freedesktop.org/xdg/xdgmime.git

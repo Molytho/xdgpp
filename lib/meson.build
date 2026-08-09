@@ -2,6 +2,7 @@ lib_sources = [
     'src/basedir.cpp',
     'src/desktop-entry.cpp',
     'src/mime-apps.cpp',
+    'src/shared-mime-info.cpp',
     'src/desktop-entry/types.cpp',
     'src/desktop-entry/well-known-keys.cpp',
     'src/desktop-entry-parser.cpp',
@@ -11,6 +12,7 @@ lib_includes = [include_directories('include')]
 
 lib_dependencies = [
     dependency('boost', modules: ['regex']),
+    dependency('xdgmime', fallback : ['xdgmime', 'libxdgmime_dep'])
 ]
 
 # These arguments are only used to build the shared library

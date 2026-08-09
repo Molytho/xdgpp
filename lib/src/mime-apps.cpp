@@ -331,11 +331,11 @@ namespace {
         }
     }
 
-    bool check_mime_type_allowed_for(mime_type mime_type,
+    bool check_mime_type_allowed_for(mime_type initial_mime_type,
         const xdg::desktop_entry_spec::search_result &result, mimeapps_list_cache &cache) {
         using association_type = xdg::mime_apps::changed_mime_types_storage::association_type;
 
-        for (; mime_type; mime_type.make_less_specific()) {
+        for (const auto &mime_type : mime_type_parent_iterator(std::move(initial_mime_type))) {
             for (const auto &mimeapp_list : cache.get_mimeapps_list_locations_with_associations()) {
                 auto &[default_apps, added_removed_types] = cache.read(mimeapp_list);
 
@@ -440,58 +440,6 @@ namespace {
 } // namespace
 
 namespace xdg::mime_apps {
-    mime_type::mime_type() = default;
-
-    mime_type::mime_type(std::string str) : m_data(std::move(str)) { }
-
-    mime_type::mime_type(std::string_view str) : m_data(str) { }
-
-    mime_type::mime_type(const mime_type &)            = default;
-    mime_type &mime_type::operator=(const mime_type &) = default;
-    mime_type::mime_type(mime_type &&)                 = default;
-    mime_type &mime_type::operator=(mime_type &&)      = default;
-
-    std::string_view mime_type::str() const noexcept {
-        return m_data;
-    }
-
-    void mime_type::make_less_specific() noexcept {
-        auto pos = m_data.find_last_of("/+;");
-        if (pos == std::string::npos) {
-            m_data = {};
-        } else {
-            m_data.resize(pos);
-        }
-    }
-
-    mime_type::operator bool() const noexcept {
-        return !m_data.empty();
-    }
-
-    bool mime_type::operator==(const mime_type &other) const noexcept = default;
-
-    bool operator==(const mime_type &lhs, std::string_view rhs) noexcept {
-        return std::string_view(lhs.m_data) == rhs;
-    }
-
-    bool operator==(std::string_view lhs, const mime_type &rhs) noexcept {
-        return lhs == std::string_view(rhs.m_data);
-    }
-
-    bool operator==(const mime_type &lhs, const std::string &rhs) noexcept {
-        return lhs.m_data == rhs;
-    }
-
-    bool operator==(const std::string &lhs, const mime_type &rhs) noexcept {
-        return lhs == rhs.m_data;
-    }
-
-    std::strong_ordering mime_type::operator<=>(const mime_type &other) const noexcept = default;
-
-    std::ostream &operator<<(std::ostream &os, const mime_type &type) {
-        return os << type.str();
-    }
-
     struct association_storage::data {
         std::map<mime_type, std::vector<application_id>> storage;
     };
@@ -739,9 +687,9 @@ namespace xdg::mime_apps {
         return get_available_applications_for_mime_type(type, cache);
     }
 
-    std::optional<desktop_entry_spec::application_entry> get_default_app_for_mime_type(mime_type mime_type,
+    std::optional<desktop_entry_spec::application_entry> get_default_app_for_mime_type(mime_type initial_mime_type,
         mimeapps_list_cache &cache) {
-        for (; mime_type; mime_type.make_less_specific()) {
+        for (const auto &mime_type : mime_type_parent_iterator(std::move(initial_mime_type))) {
             for (const auto &path : cache.get_mimeapps_list_locations()) {
                 auto &[default_apps, ignore] = cache.read(path);
                 if (!default_apps) {

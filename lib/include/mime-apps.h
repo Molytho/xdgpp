@@ -2,54 +2,13 @@
 #define LIB_XDGPP_MIME_APPS_H
 
 #include "desktop-entry.h"
-
 #include "helper.h"
+#include "shared-mime-info.h"
 
 namespace xdg::mime_apps {
-    class API_PUBLIC mime_type {
-        std::string m_data;
-
-    public:
-        mime_type();
-        mime_type(std::string str);
-        mime_type(std::string_view str);
-
-        mime_type(const mime_type &);
-        mime_type &operator=(const mime_type &);
-        mime_type(mime_type &&);
-        mime_type &operator=(mime_type &&);
-
-        std::string_view str() const noexcept;
-
-        void make_less_specific() noexcept;
-
-        explicit operator bool() const noexcept;
-
-        bool operator==(const mime_type &other) const noexcept;
-        friend API_PUBLIC bool operator==(const mime_type &lhs, std::string_view rhs) noexcept;
-        friend API_PUBLIC bool operator==(std::string_view lhs, const mime_type &rhs) noexcept;
-        friend API_PUBLIC bool operator==(const mime_type &lhs, const std::string &rhs) noexcept;
-        friend API_PUBLIC bool operator==(const std::string &lhs, const mime_type &rhs) noexcept;
-        std::strong_ordering operator<=>(const mime_type &other) const noexcept;
-    };
-
-    std::ostream API_PUBLIC &operator<<(std::ostream &os, const mime_type &type);
-} // namespace xdg::mime_apps
-
-namespace std {
-    template<>
-    class hash<xdg::mime_apps::mime_type> {
-        std::hash<std::string_view> m_hasher {};
-
-    public:
-        auto operator()(const xdg::mime_apps::mime_type &type) const noexcept {
-            return m_hasher(type.str());
-        }
-    };
-} // namespace std
-
-namespace xdg::mime_apps {
-    using application_id = desktop_entry_spec::types::application_id;
+    using mime_type                 = shared_mime_info::mime_type;
+    using mime_type_parent_iterator = shared_mime_info::mime_type_parent_iterator;
+    using application_id            = desktop_entry_spec::types::application_id;
 
     class API_PUBLIC association_storage {
         struct data;
