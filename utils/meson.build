@@ -30,7 +30,7 @@ open_dependencies = [
 ]
 
 executable(
-    'xdgpp_open',
+    'xdgpp-open',
     open_sources,
     dependencies: open_dependencies,
     include_directories: open_include,
@@ -48,7 +48,7 @@ launch_dependencies = [
 ]
 
 executable(
-    'xdgpp_launch',
+    'xdgpp-launch',
     launch_sources,
     dependencies: launch_dependencies,
     include_directories: launch_include,
