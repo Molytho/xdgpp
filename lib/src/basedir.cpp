@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-#include "private/string_helper.h"
+#include "molytho-cpp-utils/string_spliterator.h"
 
 using namespace xdg::basedir;
 
@@ -43,7 +43,7 @@ namespace {
     }
 
     std::vector<std::filesystem::path> split_multivar_variable(std::string str) {
-        auto view = xdg::detail::utils::string_spliterator {str, PathSeparator}
+        auto view = molytho::utils::string_spliterator {str, PathSeparator}
                     | std::views::transform([](std::string_view str) {
                           return check_for_absolute_path(str, XdgDataDirsVariable);
                       });

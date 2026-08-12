@@ -12,7 +12,8 @@ lib_includes = [include_directories('include')]
 
 lib_dependencies = [
     dependency('boost', modules: ['regex']),
-    dependency('xdgmime', fallback : ['xdgmime', 'libxdgmime_dep'])
+    dependency('xdgmime', fallback : ['xdgmime', 'libxdgmime_dep']),
+    molytho_cpp_utils_dep
 ]
 
 # These arguments are only used to build the shared library

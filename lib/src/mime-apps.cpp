@@ -1,6 +1,5 @@
 #include "mime-apps.h"
 
-#include <cctype>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -9,7 +8,8 @@
 #include <boost/regex.hpp>
 
 #include "basedir.h"
-#include "private/string_helper.h"
+
+#include "molytho-cpp-utils/string_spliterator.h"
 
 using namespace xdg::mime_apps;
 
@@ -242,7 +242,7 @@ namespace {
             return {};
         }
 
-        auto names = xdg::detail::utils::split_string(envvar, ',');
+        auto names = molytho::utils::split_string(envvar, ',');
         for (std::string &name : names) {
             for (char &c : name) {
                 c = std::tolower(c);
@@ -687,8 +687,8 @@ namespace xdg::mime_apps {
         return get_available_applications_for_mime_type(type, cache);
     }
 
-    std::optional<desktop_entry_spec::application_entry> get_default_app_for_mime_type(mime_type initial_mime_type,
-        mimeapps_list_cache &cache) {
+    std::optional<desktop_entry_spec::application_entry>
+        get_default_app_for_mime_type(mime_type initial_mime_type, mimeapps_list_cache &cache) {
         for (const auto &mime_type : mime_type_parent_iterator(std::move(initial_mime_type))) {
             for (const auto &path : cache.get_mimeapps_list_locations()) {
                 auto &[default_apps, ignore] = cache.read(path);

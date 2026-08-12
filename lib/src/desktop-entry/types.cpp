@@ -9,7 +9,7 @@
 
 #include <boost/regex.hpp>
 
-#include "private/string_helper.h"
+#include "molytho-cpp-utils/string_spliterator.h"
 
 using namespace std::string_view_literals;
 using namespace xdg::desktop_entry_spec;
@@ -109,7 +109,7 @@ namespace {
 
     auto split_semicolon_delimited_list(std::string_view str) noexcept {
         static const boost::regex unescaped_semicolon_re {"(?<!\\\\)(?:\\\\\\\\)*(;)"};
-        return xdg::detail::utils::re_string_spliterator(str, unescaped_semicolon_re);
+        return molytho::utils::re_string_spliterator(str, unescaped_semicolon_re);
     }
 
     bool is_ascii_control(char c) {

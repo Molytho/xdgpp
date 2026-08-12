@@ -13,6 +13,7 @@
 #include <boost/regex.hpp>
 
 #include "spawn_helper.h"
+#include "uri_helper.h"
 
 using namespace std::string_literals;
 using namespace xdg::mime_apps;
@@ -51,15 +52,6 @@ int open_uri(std::string_view scheme, std::string uri) {
         std::cerr << "No application associated with mime_type: " << mime_type << '\n';
         return 3;
     }
-}
-
-std::string_view get_uri_schema(std::string_view str) {
-    static const boost::regex uri_scheme_re {"^([[:alpha:]][[:alpha:][:digit:]+.-]*):"};
-    boost::match_results<std::string_view::const_iterator> match;
-    if (boost::regex_search(str.begin(), str.end(), match, uri_scheme_re)) {
-        return {match[0].begin(), match[1].end()};
-    }
-    return {};
 }
 
 int main(int argc, char *argv[]) try {
