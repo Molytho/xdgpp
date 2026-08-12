@@ -60,6 +60,46 @@ namespace {
 
         return result;
     }
+
+    std::string_view get_uri_schema(std::string_view str) {
+        static const boost::regex uri_scheme_re {"^([[:alpha:]][[:alpha:][:digit:]+.-]*):"};
+        boost::match_results<std::string_view::const_iterator> match;
+        if (boost::regex_search(str.begin(), str.end(), match, uri_scheme_re)) {
+            return {match[0].begin(), match[1].end()};
+        }
+        return {};
+    }
+
+    bool strip_file_uri_if_possible(std::string &file_uri) {
+        constexpr std::string_view file_scheme_start {"file://"};
+        constexpr std::string_view localhost_authority {"localhost/"};
+        if (!file_uri.starts_with(file_scheme_start)) {
+            return false;
+        }
+        auto path_component = std::string_view(file_uri).substr(file_scheme_start.size());
+        if (path_component.starts_with('/')) {
+            file_uri = std::string(path_component);
+            return true;
+        } else if (path_component.starts_with(localhost_authority)) {
+            // Keep the '/' char
+            file_uri = std::string(path_component.substr(localhost_authority.size() - 1));
+            return true;
+        }
+        return false;
+    }
+
+    bool preprocess_args(std::vector<std::string> &args) {
+        for (std::string &arg : args) {
+            auto scheme = get_uri_schema(arg);
+            if (scheme == "file" && strip_file_uri_if_possible(arg)) {
+                continue;
+            }
+            if (!scheme.empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
 } // namespace
 
 namespace xdg::desktop_entry_spec {
@@ -76,7 +116,7 @@ namespace xdg::desktop_entry_spec {
 
     namespace detail {
         std::string make_command_line(const make_command_line_interface &iface,
-            std::vector<std::string> launch_args, bool are_uri) {
+            std::vector<std::string> launch_args, bool has_uri) {
             auto exec = iface.get_exec();
 
             std::string cmdline {};
@@ -94,7 +134,7 @@ namespace xdg::desktop_entry_spec {
 
                 switch (*(next_it + 1)) {
                 case 'f':
-                    if (are_uri) {
+                    if (has_uri) {
                         throw std::runtime_error("Uris not supported");
                     }
                     [[fallthrough]];
@@ -102,21 +142,24 @@ namespace xdg::desktop_entry_spec {
                     if (launch_args.size() > 1) {
                         throw std::runtime_error("Desktop file only supports one argument");
                     } else if (launch_args.size() == 1) {
-                        cmdline.push_back('\"');
+                        cmdline.push_back('"');
                         cmdline.append(launch_args.at(0));
-                        cmdline.push_back('\"');
+                        cmdline.push_back('"');
                     }
                     break;
                 case 'F':
-                    if (are_uri) {
+                    if (has_uri) {
                         throw std::runtime_error("Uris not supported");
                     }
                     [[fallthrough]];
                 case 'U':
-                    for (const auto &arg : launch_args) {
-                        cmdline.push_back('\"');
-                        cmdline.append(arg);
-                        cmdline.push_back('\"');
+                    for (size_t i = 0; i < launch_args.size(); ++i) {
+                        if (i > 0) {
+                            cmdline.push_back(' ');
+                        }
+                        cmdline.push_back('"');
+                        cmdline.append(launch_args.at(i));
+                        cmdline.push_back('"');
                     }
                     break;
                 case 'i': {
@@ -166,7 +209,16 @@ namespace xdg::desktop_entry_spec {
         }
 
         template<class T>
-        API_PUBLIC std::string launch_impl<T>::make_command_line(std::vector<std::string> args, bool are_uris) const {
+        API_PUBLIC std::string launch_impl<T>::make_command_line(std::vector<std::string> args, arg_type type) const {
+            bool has_uri;
+            if (type == arg_type::Auto) {
+                has_uri = preprocess_args(args);
+            } else if (type == arg_type::File) {
+                has_uri = false;
+            } else {
+                has_uri = true;
+            }
+
             struct impl : make_command_line_interface {
                 const T &action;
 
@@ -182,13 +234,13 @@ namespace xdg::desktop_entry_spec {
                 std::string_view get_name() const override { return action.get_name().get(); }
             };
 
-            return xdg::desktop_entry_spec::detail::make_command_line(impl {*get_derived()}, std::move(args), are_uris);
+            return xdg::desktop_entry_spec::detail::make_command_line(impl {*get_derived()}, std::move(args), has_uri);
         }
 
         template std::string launch_impl<application_entry>::make_command_line(std::vector<std::string> args,
-            bool are_uris) const;
+            arg_type) const;
         template std::string launch_impl<application_entry_action>::make_command_line(
-            std::vector<std::string> args, bool are_uris
+            std::vector<std::string> args, arg_type
         ) const;
     } // namespace detail
 

@@ -32,30 +32,38 @@ namespace xdg::desktop_entry_spec {
 
         template<class Derived>
         class launch_impl {
+            enum class arg_type { Uri, File, Auto };
+
             const Derived *get_derived() const noexcept {
                 return static_cast<const Derived *>(this);
             }
 
             std::string_view get_path() const;
             bool get_terminal() const;
-            std::string make_command_line(std::vector<std::string> args, bool are_uris) const;
+            std::string make_command_line(std::vector<std::string> args, arg_type type) const;
 
-        public:
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
-            void launch(F &&launcher, std::vector<std::string> args, bool are_uris) const {
+            void launch(F &&launcher, std::vector<std::string> args, arg_type type) const {
                 launch_parameters params {
-                    .command_list      = make_command_line(std::move(args), are_uris),
+                    .command_list      = make_command_line(std::move(args), type),
                     .working_directory = get_path(),
                     .terminal          = get_terminal()
                 };
                 std::invoke(std::forward<F>(launcher), params);
             }
 
+        public:
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
-            void launch(F &&launcher, std::string arg, bool is_uri) const {
-                launch(std::forward<F>(launcher), std::vector {arg}, is_uri);
+            void launch(F &&launcher, std::vector<std::string> args) const {
+                launch(std::forward<F>(launcher), std::move(args), arg_type::Auto);
+            }
+
+            template<class F>
+                requires std::is_invocable_v<F, launch_parameters &>
+            void launch(F &&launcher, std::string arg) const {
+                launch(std::forward<F>(launcher), std::vector {arg}, arg_type::Auto);
             }
 
             template<class F>
@@ -66,19 +74,19 @@ namespace xdg::desktop_entry_spec {
                         [](const std::filesystem::path &path) { return path.string(); });
                     return {begin(view), end(view)};
                 }();
-                launch(std::forward<F>(launcher), std::move(args), false);
+                launch(std::forward<F>(launcher), std::move(args), arg_type::File);
             }
 
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
             void launch(F &&launcher, std::filesystem::path arg) const {
-                launch(std::forward<F>(launcher), arg.string(), false);
+                launch(std::forward<F>(launcher), std::vector<std::string> {arg.string()}, arg_type::File);
             }
 
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
             void launch(F &&launcher) const {
-                launch(std::forward<F>(launcher), std::vector<std::string> {}, false);
+                launch(std::forward<F>(launcher), std::vector<std::string> {}, arg_type::Auto);
             }
         };
     } // namespace API_PUBLIC detail

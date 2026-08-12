@@ -1,5 +1,6 @@
 #include "desktop-entry.h"
 
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -21,7 +22,7 @@ using namespace std::string_literals;
 }
 
 int main(int argc, char *argv[]) try {
-    if (argc != 2) {
+    if (argc < 2) {
         show_usage();
     }
 
@@ -42,7 +43,13 @@ int main(int argc, char *argv[]) try {
                       : throw std::runtime_error("Could not find desktop entry: "s.append(file));
     }();
 
-    spawn_as_service(entry);
+    std::vector<std::string> remaining_args {};
+    remaining_args.resize(argc - 2);
+    std::transform(&argv[2], &argv[argc], remaining_args.begin(), [](char *arg) {
+        return std::string(arg);
+    });
+
+    spawn_as_service(entry, std::move(remaining_args));
     return 0;
 } catch (const std::runtime_error &ex) {
     std::cerr << "Execution failed:\n" << ex.what() << '\n';

@@ -34,7 +34,7 @@ int open_file_path(std::filesystem::path path) {
     auto mime_type   = determine_mime_type(path);
     auto default_app = xdg::mime_apps::get_default_app_for_mime_type(mime_type);
     if (default_app) {
-        spawn_as_service(*default_app, path, false);
+        spawn_as_service(*default_app, path);
         return 0;
     } else {
         std::cerr << "No application associated with mime_type: " << mime_type << '\n';
@@ -46,7 +46,7 @@ int open_uri(std::string_view scheme, std::string uri) {
     mime_type mime_type = "x-scheme-handler/"s.append(scheme);
     auto default_app    = xdg::mime_apps::get_default_app_for_mime_type(mime_type);
     if (default_app) {
-        spawn_as_service(*default_app, uri, true);
+        spawn_as_service(*default_app, uri);
         return 0;
     } else {
         std::cerr << "No application associated with mime_type: " << mime_type << '\n';

@@ -34,6 +34,7 @@ executable(
     open_sources,
     dependencies: open_dependencies,
     include_directories: open_include,
+    install: true
 )
 
 launch_sources = [
@@ -51,4 +52,5 @@ executable(
     launch_sources,
     dependencies: launch_dependencies,
     include_directories: launch_include,
+    install: true
 )
