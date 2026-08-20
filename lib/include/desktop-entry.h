@@ -70,8 +70,10 @@ namespace xdg::desktop_entry_spec {
                 requires std::is_invocable_v<F, launch_parameters &>
             void launch(F &&launcher, std::vector<std::filesystem::path> p_args) const {
                 auto args = [&]() -> std::vector<std::string> {
-                    auto view = std::views::transform(p_args,
-                        [](const std::filesystem::path &path) { return path.string(); });
+                    auto view = std::views::transform(p_args, [](const std::filesystem::path &p_path) {
+                        const auto &path = p_path.is_absolute() ? p_path : absolute(p_path);
+                        return path.string();
+                    });
                     return {begin(view), end(view)};
                 }();
                 launch(std::forward<F>(launcher), std::move(args), arg_type::File);
@@ -80,7 +82,7 @@ namespace xdg::desktop_entry_spec {
             template<class F>
                 requires std::is_invocable_v<F, launch_parameters &>
             void launch(F &&launcher, std::filesystem::path arg) const {
-                launch(std::forward<F>(launcher), std::vector<std::string> {arg.string()}, arg_type::File);
+                launch(std::forward<F>(launcher), std::vector<std::filesystem::path> {std::move(arg)});
             }
 
             template<class F>
